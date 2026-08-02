@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Local secrets and editor files
+.env
+.env.*
+.idea/
+.vscode/
