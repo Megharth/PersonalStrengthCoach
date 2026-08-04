@@ -26,18 +26,18 @@ enum HealthKitService {
         for offset in 0..<15 {
             let day = calendar.date(byAdding: .day, value: -offset, to: calendar.startOfDay(for: .now))!
             let nextDay = calendar.date(byAdding: .day, value: 1, to: day)!
+            // Attribute overnight sleep to the day it ends (the user's wake-up day).
             let sleepHours = asleepHours(from: sleep.filter { calendar.isDate($0.endDate, inSameDayAs: day) })
             let dailyHRV = average(hrv, on: day, unit: .secondUnit(with: .milli))
             let dailyHeartRate = average(heartRate, on: day, unit: .count().unitDivided(by: .minute()))
-            guard sleepHours > 0, dailyHRV > 0, dailyHeartRate > 0 else { continue }
             let weight = mass.filter { $0.startDate < nextDay }.max(by: { $0.startDate < $1.startDate })?.quantity.doubleValue(for: .gramUnit(with: .kilo)) ?? 0
 
             if let existing = stored.first(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
-                existing.sleepHours = sleepHours
-                existing.hrv = dailyHRV
-                existing.restingHeartRate = dailyHeartRate
-                existing.weightKg = weight
-            } else {
+                if sleepHours > 0 { existing.sleepHours = sleepHours }
+                if dailyHRV > 0 { existing.hrv = dailyHRV }
+                if dailyHeartRate > 0 { existing.restingHeartRate = dailyHeartRate }
+                if weight > 0 { existing.weightKg = weight }
+            } else if sleepHours > 0 || dailyHRV > 0 || dailyHeartRate > 0 || weight > 0 {
                 context.insert(DailyRecovery(date: day, sleepHours: sleepHours, hrv: dailyHRV, restingHeartRate: dailyHeartRate, weightKg: weight))
             }
         }

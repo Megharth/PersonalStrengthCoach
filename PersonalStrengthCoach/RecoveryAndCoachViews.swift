@@ -6,11 +6,15 @@ struct RecoveryView: View {
     var body: some View { NavigationStack { ScrollView { VStack(alignment: .leading, spacing: 18) {
         Text("Recovery").font(.largeTitle.bold())
         let score = RecoveryEngine.readiness(today: recoveryDays.first, recent: recoveryDays, workouts: workouts)
+        let recent = Array(recoveryDays.prefix(7))
+        let count = Double(recent.count)
+        let averageSleep = count == 0 ? 0 : recent.map(\.sleepHours).reduce(0, +) / count
+        let averageHRV = count == 0 ? 0 : recent.map(\.hrv).reduce(0, +) / count
         ReadinessCard(result: score)
         Text("Muscle recovery").font(.title3.bold())
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) { ForEach(MuscleGroup.allCases) { muscle in let value = RecoveryEngine.muscleRecovery(muscle, workouts: workouts); MuscleRecoveryTile(muscle: muscle, value: value) } }
         Text("Weekly averages").font(.title3.bold()).padding(.top, 4)
-        HStack { MetricCard(title: "Sleep", value: String(format: "%.1f", recoveryDays.prefix(7).map(\.sleepHours).reduce(0, +) / 7), unit: "hours", icon: "bed.double.fill", tint: .indigo); MetricCard(title: "HRV", value: "\(Int(recoveryDays.prefix(7).map(\.hrv).reduce(0,+) / 7))", unit: "ms", icon: "waveform.path.ecg", tint: .pink) }
+        HStack { MetricCard(title: "Sleep", value: String(format: "%.1f", averageSleep), unit: "hours", icon: "bed.double.fill", tint: .indigo); MetricCard(title: "HRV", value: "\(Int(averageHRV))", unit: "ms", icon: "waveform.path.ecg", tint: .pink) }
     }.padding() }.background(Color(uiColor: .systemGroupedBackground)) } }
 }
 
