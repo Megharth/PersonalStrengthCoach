@@ -17,13 +17,23 @@ struct ImportedWorkout: Identifiable {
     let sets: [ImportedSet]
 }
 
+struct StrongImportResult {
+    let workouts: [ImportedWorkout]
+    let skippedRows: Int
+    let failedRows: Int
+}
+
 struct StrongImportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Query private var existingWorkouts: [Workout]
     @State private var showingFilePicker = false
     @State private var showingPaste = false
     @State private var imports: [ImportedWorkout] = []
     @State private var importError: String?
+    @State private var importSummary: String?
+    @State private var skippedRows = 0
+    @State private var failedRows = 0
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     var body: some View {
@@ -69,6 +79,9 @@ struct StrongImportView: View {
         .alert("Couldn’t import export", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
             Button("OK", role: .cancel) { }
         } message: { Text(importError ?? "Unknown import error") }
+        .alert("Import complete", isPresented: Binding(get: { importSummary != nil }, set: { if !$0 { importSummary = nil } })) {
+            Button("Done") { dismiss() }
+        } message: { Text(importSummary ?? "") }
     }
 
     private func load(_ url: URL) {
@@ -80,15 +93,23 @@ struct StrongImportView: View {
 
     private func parse(_ text: String) {
         do {
-            let parsed = try StrongImportParser.parse(text)
-            guard !parsed.isEmpty else { throw StrongImportError.noWorkouts }
-            imports = parsed
+            let result = try StrongImportParser.parse(text)
+            imports = result.workouts
+            skippedRows = result.skippedRows
+            failedRows = result.failedRows
         } catch { importError = error.localizedDescription }
     }
 
     private func save() {
+        var importedCount = 0
+        var duplicateCount = 0
+        var knownWorkouts = existingWorkouts
         do {
             for imported in imports {
+                if knownWorkouts.contains(where: { Self.isDuplicate($0, imported) }) {
+                    duplicateCount += 1
+                    continue
+                }
                 let workout = Workout(date: imported.date, title: imported.title, durationMinutes: 0)
                 context.insert(workout)
                 for (index, importedSet) in imported.sets.enumerated() {
@@ -97,13 +118,26 @@ struct StrongImportView: View {
                     set.workout = workout
                     context.insert(set)
                 }
+                knownWorkouts.append(workout)
+                importedCount += 1
             }
             try context.save()
-            dismiss()
+            importSummary = "Imported \(importedCount) workout(s). Skipped \(skippedRows) row(s), failed \(failedRows) row(s), and ignored \(duplicateCount) duplicate workout(s)."
         } catch {
             context.rollback()
             logger.error("Strong import save failed")
             importError = "The import could not be saved. Nothing was imported; try again."
+        }
+    }
+
+    static func isDuplicate(_ stored: Workout, _ imported: ImportedWorkout) -> Bool {
+        stored.title.caseInsensitiveCompare(imported.title) == .orderedSame &&
+        abs(stored.date.timeIntervalSince(imported.date)) < 60 &&
+        stored.sets.count == imported.sets.count &&
+        zip(stored.sets.sorted { $0.setNumber < $1.setNumber }, imported.sets).allSatisfy { storedSet, importedSet in
+            storedSet.exercise.caseInsensitiveCompare(importedSet.exercise) == .orderedSame &&
+            abs(storedSet.weight - importedSet.weight) < 0.01 &&
+            storedSet.reps == importedSet.reps
         }
     }
 }
@@ -125,88 +159,133 @@ private struct PasteImportView: View {
 }
 
 enum StrongImportError: LocalizedError {
-    case unsupported, noWorkouts
+    case unsupported, noWorkouts, fileTooLarge, malformedExport
     var errorDescription: String? {
         switch self {
         case .unsupported: return "No workouts could be recognized. Use a CSV with Date, Exercise, Weight, and Reps columns, or a Strong JSON export."
         case .noWorkouts: return "This export did not contain any completed workout sets."
+        case .fileTooLarge: return "This export is too large to import. Choose a file smaller than 10 MB."
+        case .malformedExport: return "The export is malformed. Check that it is a valid Strong CSV or JSON export and try again."
         }
     }
 }
 
 enum StrongImportParser {
-    static func parse(_ text: String) throws -> [ImportedWorkout] {
+    static func parse(_ text: String) throws -> StrongImportResult {
+        guard text.utf8.count <= 10_000_000 else { throw StrongImportError.fileTooLarge }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.first == "{" || trimmed.first == "[" {
-            let json = try JSONSerialization.jsonObject(with: Data(text.utf8))
-            let workouts = parseJSON(json)
-            guard !workouts.isEmpty else { throw StrongImportError.unsupported }
-            return workouts
+            let json: Any
+            do {
+                json = try JSONSerialization.jsonObject(with: Data(text.utf8))
+            } catch {
+                throw StrongImportError.malformedExport
+            }
+            let result = parseJSON(json)
+            guard !result.workouts.isEmpty else { throw StrongImportError.unsupported }
+            return result
         }
-        if let workout = parseShareText(trimmed) { return [workout] }
-        let workouts = parseCSV(text)
-        guard !workouts.isEmpty else { throw StrongImportError.unsupported }
-        return workouts
+        if let result = parseShareText(trimmed) { return result }
+        let result = parseCSV(text)
+        guard !result.workouts.isEmpty else { throw StrongImportError.unsupported }
+        return result
     }
 
-    private static func parseJSON(_ value: Any) -> [ImportedWorkout] {
+    private static func parseJSON(_ value: Any) -> StrongImportResult {
         let candidates: [[String: Any]]
         if let array = value as? [[String: Any]] { candidates = array }
         else if let dictionary = value as? [String: Any] { candidates = dictionary.array(for: ["workouts", "data", "history"]) }
         else { candidates = [] }
-        return candidates.compactMap { workout in
+        var skippedRows = 0
+        var failedRows = 0
+        let workouts = candidates.compactMap { workout -> ImportedWorkout? in
             let title = workout.string(for: ["name", "title", "workoutname"]) ?? "Imported Workout"
-            let date = parseDate(workout.value(for: ["date", "startdate", "timestamp", "createdat"])) ?? .now
+            guard let date = parseDate(workout.value(for: ["date", "startdate", "timestamp", "createdat"])) else {
+                failedRows += 1
+                return nil
+            }
             let exercises = workout.array(for: ["exercises", "workoutexercises", "exerciseitems"])
             let sets = exercises.flatMap { exercise -> [ImportedSet] in
                 let name = exercise.string(for: ["name", "exercisename", "title"]) ?? "Exercise"
                 return exercise.array(for: ["sets", "exercisesets", "setdata"]).compactMap { item in
-                    guard let reps = item.int(for: ["reps", "repetitions"]) else { return nil }
-                    return ImportedSet(exercise: name, weight: item.double(for: ["weight", "weightkg", "load"]) ?? 0, reps: reps)
+                    guard let reps = item.int(for: ["reps", "repetitions"]) else { failedRows += 1; return nil }
+                    guard let weight = item.weightKg() else { failedRows += 1; return nil }
+                    guard let set = makeSet(exercise: name, weight: weight, reps: reps) else { failedRows += 1; return nil }
+                    return set
                 }
             }
-            return sets.isEmpty ? nil : ImportedWorkout(title: title, date: date, sets: sets)
+            guard !sets.isEmpty else { skippedRows += 1; return nil }
+            return ImportedWorkout(title: title, date: date, sets: sets)
         }
+        return StrongImportResult(workouts: workouts, skippedRows: skippedRows, failedRows: failedRows)
     }
 
-    private static func parseCSV(_ text: String) -> [ImportedWorkout] {
+    private static func parseCSV(_ text: String) -> StrongImportResult {
         let rows = text.split(whereSeparator: \.isNewline).map { csvRow(String($0)) }
-        guard let header = rows.first, header.count > 1 else { return [] }
+        guard let header = rows.first, header.count > 1 else { return StrongImportResult(workouts: [], skippedRows: 0, failedRows: 0) }
         let keys = header.map { $0.lowercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "_", with: "") }
         func value(_ row: [String], _ names: [String]) -> String? { names.compactMap { keys.firstIndex(of: $0).flatMap { $0 < row.count ? row[$0] : nil } }.first }
         var grouped: [String: (title: String, date: Date, sets: [ImportedSet])] = [:]
+        var skippedRows = 0
+        var failedRows = 0
         for row in rows.dropFirst() {
-            guard let exercise = value(row, ["exercise", "exercisename", "name"]), let repsText = value(row, ["reps", "repetitions"]), let reps = Int(repsText.trimmingCharacters(in: .whitespaces)) else { continue }
+            if row.allSatisfy({ $0.isEmpty }) { skippedRows += 1; continue }
+            guard let exercise = value(row, ["exercise", "exercisename", "name"]), let repsText = value(row, ["reps", "repetitions"]), let reps = Int(repsText.trimmingCharacters(in: .whitespaces)) else { failedRows += 1; continue }
             let title = value(row, ["workout", "workoutname", "title"]) ?? "Imported Workout"
-            let date = parseDate(value(row, ["date", "timestamp", "startdate"])) ?? .now
-            let weight = Double((value(row, ["weight", "weightkg", "load"]) ?? "0").replacingOccurrences(of: ",", with: ".")) ?? 0
+            guard let date = parseDate(value(row, ["date", "timestamp", "startdate"])) else { failedRows += 1; continue }
+            guard let weightColumn = keys.firstIndex(where: { ["weight", "weightkg", "weightlb", "weightlbs", "load"].contains($0) }), weightColumn < row.count else { failedRows += 1; continue }
+            guard let weight = weightKg(row[weightColumn], header: keys[weightColumn]) else { failedRows += 1; continue }
+            guard let importedSet = makeSet(exercise: exercise, weight: weight, reps: reps) else { failedRows += 1; continue }
             let key = "\(title)-\(Int(date.timeIntervalSince1970))"
-            grouped[key, default: (title, date, [])].sets.append(ImportedSet(exercise: exercise, weight: weight, reps: reps))
+            grouped[key, default: (title, date, [])].sets.append(importedSet)
         }
-        return grouped.values.map { ImportedWorkout(title: $0.title, date: $0.date, sets: $0.sets) }.sorted { $0.date > $1.date }
+        return StrongImportResult(workouts: grouped.values.map { ImportedWorkout(title: $0.title, date: $0.date, sets: $0.sets) }.sorted { $0.date > $1.date }, skippedRows: skippedRows, failedRows: failedRows)
     }
 
     /// Parses Strong's shared-workout text: an activity title, natural-language date,
     /// exercise headings, and lines such as “Set 1: 75 lb × 8”.
-    private static func parseShareText(_ text: String) -> ImportedWorkout? {
+    private static func parseShareText(_ text: String) -> StrongImportResult? {
         let lines = text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !$0.hasPrefix("http") }
         guard lines.count >= 3, lines.contains(where: { $0.lowercased().hasPrefix("set ") }) else { return nil }
         let title = lines[0]
-        let date = parseShareDate(lines[1]) ?? .now
+        guard let date = parseShareDate(lines[1]) else { return nil }
         let expression = try? NSRegularExpression(pattern: "^Set\\s+\\d+\\s*:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*(lb|lbs|kg)?\\s*[×x]\\s*(\\d+)", options: [.caseInsensitive])
         var exercise = "Exercise"
         var sets: [ImportedSet] = []
+        var failedRows = 0
         for line in lines.dropFirst(2) {
             let range = NSRange(line.startIndex..., in: line)
-            guard let match = expression?.firstMatch(in: line, range: range) else { exercise = line; continue }
-            guard let weightRange = Range(match.range(at: 1), in: line), let repsRange = Range(match.range(at: 3), in: line), let weight = Double(line[weightRange]), let reps = Int(line[repsRange]) else { continue }
+            guard let match = expression?.firstMatch(in: line, range: range) else {
+                if line.lowercased().hasPrefix("set ") { failedRows += 1 } else { exercise = line }
+                continue
+            }
+            guard let weightRange = Range(match.range(at: 1), in: line), let repsRange = Range(match.range(at: 3), in: line), let weight = Double(line[weightRange]), let reps = Int(line[repsRange]) else {
+                failedRows += 1
+                continue
+            }
             let unit = match.range(at: 2).location == NSNotFound ? "kg" : String(line[Range(match.range(at: 2), in: line)!]).lowercased()
             let weightKg = unit.hasPrefix("lb") ? weight * 0.453_592_37 : weight
-            sets.append(ImportedSet(exercise: exercise, weight: weightKg, reps: reps))
+            if let set = makeSet(exercise: exercise, weight: weightKg, reps: reps) { sets.append(set) } else { failedRows += 1 }
         }
-        return sets.isEmpty ? nil : ImportedWorkout(title: title, date: date, sets: sets)
+        return sets.isEmpty ? nil : StrongImportResult(workouts: [ImportedWorkout(title: title, date: date, sets: sets)], skippedRows: 0, failedRows: failedRows)
+    }
+
+    private static func makeSet(exercise: String, weight: Double, reps: Int) -> ImportedSet? {
+        let name = exercise.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, weight.isFinite, weight >= 0, reps > 0 else { return nil }
+        return ImportedSet(exercise: name, weight: weight, reps: reps)
+    }
+
+    private static func weightKg(_ value: String, header: String) -> Double? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        let parts = normalized.split(separator: " ", maxSplits: 1).map(String.init)
+        guard let rawWeight = parts.first, let weight = Double(rawWeight), weight.isFinite else { return nil }
+        let unit = parts.count == 2 ? parts[1].lowercased() : (header.contains("lb") ? "lb" : "kg")
+        guard unit == "kg" || unit == "kgs" || unit == "kilogram" || unit == "kilograms" || unit == "lb" || unit == "lbs" || unit == "pound" || unit == "pounds" else { return nil }
+        let kilograms = unit.hasPrefix("lb") || unit.hasPrefix("pound") ? weight * 0.453_592_37 : weight
+        return kilograms >= 0 ? kilograms : nil
     }
 
     private static func parseShareDate(_ string: String) -> Date? {
@@ -247,4 +326,35 @@ private extension Dictionary where Key == String, Value == Any {
     func double(for names: [String]) -> Double? { if let value = value(for: names) as? NSNumber { return value.doubleValue }; return string(for: names).flatMap(Double.init) }
     func int(for names: [String]) -> Int? { if let value = value(for: names) as? NSNumber { return value.intValue }; return string(for: names).flatMap(Int.init) }
     func array(for names: [String]) -> [[String: Any]] { value(for: names) as? [[String: Any]] ?? [] }
+
+    func weightKg() -> Double? {
+        let raw = value(for: ["weightlb", "weightlbs", "weightkg", "weight", "load"])
+        let number: Double
+        if let value = raw as? NSNumber { number = value.doubleValue }
+        else if let string = raw as? String {
+            let parts = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ",", with: ".")
+                .split(separator: " ", maxSplits: 1)
+            guard let parsed = parts.first.flatMap({ Double($0) }) else { return nil }
+            number = parsed
+            let unit = parts.count == 2 ? String(parts[1]).lowercased() : (value(for: ["unit", "weightunit"]).map { "\($0)".lowercased() } ?? "")
+            return convertToKg(number, unit: unit)
+        } else { return nil }
+        let key = firstKey(for: ["weightlb", "weightlbs", "weightkg", "weight", "load"])
+        let unit = value(for: ["unit", "weightunit"]).map { "\($0)".lowercased() } ?? ""
+        return convertToKg(number, unit: unit.isEmpty ? (key?.contains("lb") == true ? "lb" : "kg") : unit)
+    }
+
+    private func firstKey(for names: [String]) -> String? {
+        let normalized = Dictionary(uniqueKeysWithValues: map { ($0.key.lowercased().replacingOccurrences(of: "_", with: ""), $0.value) })
+        return names.first(where: { normalized[$0] != nil })
+    }
+
+    private func convertToKg(_ weight: Double, unit: String) -> Double? {
+        guard weight.isFinite else { return nil }
+        let normalized = unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized == "kg" || normalized == "kgs" || normalized == "kilogram" || normalized == "kilograms" || normalized == "lb" || normalized == "lbs" || normalized == "pound" || normalized == "pounds" else { return nil }
+        let kilograms = normalized.hasPrefix("lb") || normalized.hasPrefix("pound") ? weight * 0.453_592_37 : weight
+        return kilograms >= 0 ? kilograms : nil
+    }
 }

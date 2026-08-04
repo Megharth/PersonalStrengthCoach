@@ -6,8 +6,19 @@
 	objectVersion = 71;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		A1B2C3D4E5F6000000000026 /* Proxy for PersonalStrengthCoach */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1B2C3D4E5F6000000000010 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1B2C3D4E5F6000000000005;
+			remoteInfo = PersonalStrengthCoach;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F6000000000001 /* PersonalStrengthCoach.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PersonalStrengthCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PersonalStrengthCoachTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -31,6 +42,11 @@
 			path = PersonalStrengthCoach;
 			sourceTree = "<group>";
 		};
+		A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PersonalStrengthCoachTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +64,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6000000000002 /* PersonalStrengthCoach */,
+				A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */,
 				A1B2C3D4E5F6000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -56,6 +73,7 @@
 			isa = PBXGroup;
 			children = (
 				A1B2C3D4E5F6000000000001 /* PersonalStrengthCoach.app */,
+				A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,6 +100,25 @@
 			productName = PersonalStrengthCoach;
 			productReference = A1B2C3D4E5F6000000000001 /* PersonalStrengthCoach.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A1B2C3D4E5F6000000000019 /* PersonalStrengthCoachTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F6000000000020 /* Build configuration list for PBXNativeTarget "PersonalStrengthCoachTests" */;
+			buildPhases = (
+				A1B2C3D4E5F6000000000021 /* Sources */,
+				A1B2C3D4E5F6000000000022 /* Frameworks */,
+				A1B2C3D4E5F6000000000023 /* Resources */,
+			);
+			dependencies = (
+				A1B2C3D4E5F6000000000027 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */,
+			);
+			name = PersonalStrengthCoachTests;
+			productName = PersonalStrengthCoachTests;
+			productReference = A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -113,6 +150,7 @@
 			projectRoot = "";
 			targets = (
 				A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */,
+				A1B2C3D4E5F6000000000019 /* PersonalStrengthCoachTests */,
 			);
 		};
 /* End PBXProject section */
@@ -135,7 +173,36 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F6000000000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6000000000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A1B2C3D4E5F6000000000027 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */;
+			targetProxy = A1B2C3D4E5F6000000000026 /* Proxy for PersonalStrengthCoach */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1B2C3D4E5F6000000000012 /* Debug */ = {
@@ -160,6 +227,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VQF5827785;
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PersonalStrengthCoach/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -194,6 +262,34 @@
 			};
 			name = Release;
 		};
+		A1B2C3D4E5F6000000000024 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalstrengthcoach.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PersonalStrengthCoach.app/PersonalStrengthCoach";
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6000000000025 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalstrengthcoach.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PersonalStrengthCoach.app/PersonalStrengthCoach";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -211,6 +307,15 @@
 			buildConfigurations = (
 				A1B2C3D4E5F6000000000012 /* Debug */,
 				A1B2C3D4E5F6000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F6000000000020 /* Build configuration list for PBXNativeTarget "PersonalStrengthCoachTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6000000000024 /* Debug */,
+				A1B2C3D4E5F6000000000025 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
