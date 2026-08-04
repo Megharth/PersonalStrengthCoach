@@ -34,6 +34,8 @@ Open **History**, tap **+**, and choose **Log workout** to record a session. Fro
 All workout and recovery records are stored locally with SwiftData. Apple Health access is read-only.
 Sample data is added only in debug builds; release builds show data saved on the device.
 
+The Settings tab exports local workouts, recovery records, and custom exercises as versioned JSON and can delete the local SwiftData store. Deleting app data does not delete Apple Health history. SwiftData models are registered through `AppMigrationPlan`; future model changes should add a new versioned schema and migration stage.
+
 ## Project structure
 
 ```text

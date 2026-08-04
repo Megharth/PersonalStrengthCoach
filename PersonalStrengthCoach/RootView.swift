@@ -17,6 +17,7 @@ struct RootView: View {
             WorkoutHistoryView(workouts: workouts).tabItem { Label("History", systemImage: "clock.arrow.circlepath") }.tag(2)
             RecoveryView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Recovery", systemImage: "heart.fill") }.tag(3)
             CoachView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Coach", systemImage: "sparkles") }.tag(4)
+            DataManagementView().tabItem { Label("Settings", systemImage: "gearshape.fill") }.tag(5)
         }
         .tint(.mint)
         .task {
