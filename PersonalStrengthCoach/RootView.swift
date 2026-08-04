@@ -1,11 +1,14 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     @Query(sort: \DailyRecovery.date, order: .reverse) private var recoveryDays: [DailyRecovery]
     @State private var selectedTab = 0
+    @State private var healthKitError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "HealthKit")
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -20,7 +23,20 @@ struct RootView: View {
             #if DEBUG
             SeedData.loadIfNeeded(context: context, workouts: workouts)
             #endif
-            try? await HealthKitService.sync(context: context)
+            await syncHealthKit()
+        }
+        .alert("Couldn’t sync Health data", isPresented: Binding(get: { healthKitError != nil }, set: { if !$0 { healthKitError = nil } })) {
+            Button("Retry") { Task { await syncHealthKit() } }
+            Button("Not now", role: .cancel) { }
+        } message: { Text(healthKitError ?? "Health data could not be refreshed.") }
+    }
+
+    private func syncHealthKit() async {
+        do {
+            try await HealthKitService.sync(context: context)
+        } catch {
+            logger.error("HealthKit sync failed")
+            healthKitError = "Check Health permissions and try again."
         }
     }
 }

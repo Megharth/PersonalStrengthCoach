@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import OSLog
 
 struct ImportedSet: Identifiable {
     let id = UUID()
@@ -23,6 +24,7 @@ struct StrongImportView: View {
     @State private var showingPaste = false
     @State private var imports: [ImportedWorkout] = []
     @State private var importError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     var body: some View {
         Group {
@@ -85,18 +87,24 @@ struct StrongImportView: View {
     }
 
     private func save() {
-        for imported in imports {
-            let workout = Workout(date: imported.date, title: imported.title, durationMinutes: 0)
-            context.insert(workout)
-            for (index, importedSet) in imported.sets.enumerated() {
-                let muscle = ExerciseCatalog.muscles(for: importedSet.exercise).first ?? .core
-                let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: index + 1, primaryMuscle: muscle)
-                set.workout = workout
-                context.insert(set)
+        do {
+            for imported in imports {
+                let workout = Workout(date: imported.date, title: imported.title, durationMinutes: 0)
+                context.insert(workout)
+                for (index, importedSet) in imported.sets.enumerated() {
+                    let muscle = ExerciseCatalog.muscles(for: importedSet.exercise).first ?? .core
+                    let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: index + 1, primaryMuscle: muscle)
+                    set.workout = workout
+                    context.insert(set)
+                }
             }
+            try context.save()
+            dismiss()
+        } catch {
+            context.rollback()
+            logger.error("Strong import save failed")
+            importError = "The import could not be saved. Nothing was imported; try again."
         }
-        try? context.save()
-        dismiss()
     }
 }
 

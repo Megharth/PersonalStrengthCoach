@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
 struct EditableSet: Identifiable, Hashable {
     let id = UUID()
@@ -22,6 +23,8 @@ struct WorkoutLoggerView: View {
     @State private var exercises: [LoggedExercise] = []
     @State private var showingExercisePicker = false
     @State private var showingEmptyAlert = false
+    @State private var saveError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     var body: some View {
         NavigationStack {
@@ -64,6 +67,9 @@ struct WorkoutLoggerView: View {
             .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
                 Button("OK", role: .cancel) { }
             } message: { Text("A workout needs at least one exercise and one working set.") }
+            .alert("Couldn’t save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
         }
     }
 
@@ -79,8 +85,13 @@ struct WorkoutLoggerView: View {
                 context.insert(set)
             }
         }
-        try? context.save()
-        dismiss()
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            logger.error("Workout save failed")
+            saveError = "Your workout was not saved. Try again."
+        }
     }
 }
 
@@ -157,6 +168,8 @@ struct NewExerciseView: View {
     @Environment(\.modelContext) private var context
     @State private var name = ""
     @State private var muscle: MuscleGroup = .chest
+    @State private var saveError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
     let created: (LibraryExercise) -> Void
 
     var body: some View {
@@ -170,14 +183,23 @@ struct NewExerciseView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Add") { add() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
+            .alert("Couldn’t save exercise", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(saveError ?? "Your exercise was not saved. Try again.") }
         }
     }
 
     private func add() {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         context.insert(CustomExercise(name: cleanName, primaryMuscle: muscle))
-        try? context.save()
-        created(LibraryExercise(name: cleanName, primaryMuscle: muscle))
-        dismiss()
+        do {
+            try context.save()
+            created(LibraryExercise(name: cleanName, primaryMuscle: muscle))
+            dismiss()
+        } catch {
+            logger.error("Custom exercise save failed")
+            context.rollback()
+            saveError = "Your exercise was not saved. Try again."
+        }
     }
 }
