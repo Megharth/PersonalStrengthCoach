@@ -45,11 +45,11 @@ PersonalStrengthCoach/
 ├── StrongImportView.swift           Strong export parsing and import
 ├── TrainingEngines.swift            Readiness, performance, and recommendations
 ├── RecoveryAndCoachViews.swift      Recovery, exercise trends, and coach UI
-├── AIInsightService.swift           Optional OpenAI Responses API client
+├── AIInsightService.swift           Proxy-only AI coaching client
 ├── Components.swift                 Reusable cards and charts
 └── SeedData.swift                   First-launch sample data
 ```
 
-## AI integration status
+## Coach integration status
 
-`AIInsightService.swift` contains an optional OpenAI Responses API client, but the current Coach screen uses local recommendations and does not yet provide API-key settings or call the service. Do not embed an API key in the app binary; add a server-side proxy before enabling this in a distributed build.
+Coach AI calls the configured `AIProxyURL`; the app never contains an OpenAI key or calls the provider directly. The proxy must authenticate the app, rate-limit requests, redact sensitive data, call OpenAI server-side, and return `{ "text": "..." }`. Configure `AI_PROXY_URL` per Release environment; when it is absent or unavailable, the app uses the local recommendation.

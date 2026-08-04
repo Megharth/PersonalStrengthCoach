@@ -28,9 +28,21 @@ struct ExerciseDetailView: View {
 
 struct CoachView: View {
     let workouts: [Workout]; let recoveryDays: [DailyRecovery]
-    @State private var question = ""; @State private var messages = [("Coach", "Ask about your training, recovery, or next session.")]
+    @State private var question = ""; @State private var messages = [("Coach", "Ask about your training, recovery, or next session.")]; @State private var isLoading = false
     var body: some View { NavigationStack { VStack(spacing: 0) { ScrollView { LazyVStack(alignment: .leading, spacing: 14) { ForEach(messages.indices, id: \.self) { i in let message = messages[i]; VStack(alignment: message.0 == "You" ? .trailing : .leading, spacing: 4) { Text(message.0).font(.caption.weight(.bold)).foregroundStyle(.secondary); Text(message.1).padding(13).background(message.0 == "You" ? Color.mint.opacity(0.25) : Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16)) }.frame(maxWidth: .infinity, alignment: message.0 == "You" ? .trailing : .leading) } }.padding() }.background(Color(uiColor: .systemGroupedBackground))
-        HStack { TextField("Ask your coach", text: $question, axis: .vertical).textFieldStyle(.roundedBorder); Button { send() } label: { Image(systemName: "arrow.up.circle.fill").font(.title2) }.disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }.padding()
+        HStack { TextField("Ask your coach", text: $question, axis: .vertical).textFieldStyle(.roundedBorder); Button { send() } label: { if isLoading { ProgressView() } else { Image(systemName: "arrow.up.circle.fill").font(.title2) } }.disabled(isLoading || question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }.padding()
     }.navigationTitle("Coach") } }
-    private func send() { let text = question.trimmingCharacters(in: .whitespacesAndNewlines); messages.append(("You", text)); let r = RecoveryEngine.readiness(today: recoveryDays.first, recent: recoveryDays, workouts: workouts); let rec = RecommendationEngine.nextWorkout(workouts: workouts); messages.append(("Coach", "Your readiness is \(r.score)/100. \(rec.detail) Connect an OpenAI API key in Settings to receive personalized, data-grounded coaching responses.")); question = "" }
+    private func send() {
+        let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        messages.append(("You", text)); question = ""; isLoading = true
+        let readiness = RecoveryEngine.readiness(today: recoveryDays.first, recent: recoveryDays, workouts: workouts)
+        let recommendation = RecommendationEngine.nextWorkout(workouts: workouts)
+        let context = AIInsightContext(readinessScore: readiness.score, sleepHours: recoveryDays.first?.sleepHours ?? 0, hrv: recoveryDays.first?.hrv ?? 0, restingHeartRate: recoveryDays.first?.restingHeartRate ?? 0, weeklyVolume: PerformanceEngine.weeklyVolume(workouts), recommendation: recommendation.detail)
+        Task {
+            let reply: String
+            do { reply = try await AIInsightService.requestInsight(question: text, context: context) }
+            catch { reply = "Coach AI is unavailable right now. Your local recommendation: \(recommendation.detail)" }
+            messages.append(("Coach", reply)); isLoading = false
+        }
+    }
 }

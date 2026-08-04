@@ -22,6 +22,8 @@
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Personal Strength Coach reads your sleep, heart, and body measurements to calculate recovery and readiness.</string>
+	<key>AIProxyURL</key>
+	<string>$(AI_PROXY_URL)</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>
