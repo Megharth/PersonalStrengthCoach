@@ -1,31 +1,47 @@
 import Foundation
 
+enum ReadinessConfidence { case low, medium, high }
+
 struct ReadinessResult {
     let score: Int
     let color: String
     let factors: [String]
+    let confidence: ReadinessConfidence
 }
 
 enum RecoveryEngine {
-    static func readiness(today: DailyRecovery?, recent: [DailyRecovery], workouts: [Workout]) -> ReadinessResult {
-        guard let today else { return ReadinessResult(score: 50, color: "Yellow", factors: ["Connect Apple Health to calculate readiness."]) }
+    static func readiness(today: DailyRecovery?, recent: [DailyRecovery], workouts: [Workout], now: Date = .now) -> ReadinessResult {
+        guard let today else { return ReadinessResult(score: 50, color: "Yellow", factors: ["Connect Apple Health to calculate readiness."], confidence: .low) }
+        let dayDiff = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: today.date), to: Calendar.current.startOfDay(for: now)).day ?? Int.max
+        let isStale = dayDiff > 1 || dayDiff < 0
+        if isStale {
+            return ReadinessResult(score: 50, color: "Yellow", factors: ["Your recovery data looks stale — sync Apple Health to refresh."], confidence: .low)
+        }
         let baseline = recent.filter { $0.date < today.date }.prefix(14)
-        let hrvBase = baseline.map(\.hrv).average ?? today.hrv
-        let rhrBase = baseline.map(\.restingHeartRate).average ?? today.restingHeartRate
+        let validBaseline = baseline.filter { $0.hrv > 0 && $0.restingHeartRate > 0 }
+        let hrvBaselineAvg = validBaseline.map(\.hrv).average
+        let rhrBaselineAvg = validBaseline.map(\.restingHeartRate).average
         let sleep = min(30, max(0, (today.sleepHours / 8) * 30))
-        let hrv = min(30, max(0, (today.hrv / hrvBase) * 30))
-        let rhr = min(20, max(0, (rhrBase / today.restingHeartRate) * 20))
+        let hrv: Double = (today.hrv > 0 && hrvBaselineAvg != nil) ? min(30, max(0, (today.hrv / hrvBaselineAvg!) * 30)) : 15
+        let rhr: Double = (today.restingHeartRate > 0 && rhrBaselineAvg != nil) ? min(20, max(0, (rhrBaselineAvg! / today.restingHeartRate) * 20)) : 10
         let yesterdayLoad = workouts.filter { Calendar.current.isDateInYesterday($0.date) }.reduce(0) { $0 + $1.volume }
         let load = yesterdayLoad > 8_000 ? 8.0 : yesterdayLoad > 4_000 ? 14.0 : 20.0
         let score = Int((sleep + hrv + rhr + load).rounded())
         let color = score >= 75 ? "Green" : score >= 55 ? "Yellow" : "Red"
-        return ReadinessResult(score: score, color: color, factors: ["Sleep \(String(format: "%.1f", today.sleepHours))h", "HRV \(Int(today.hrv)) ms", "RHR \(Int(today.restingHeartRate)) bpm"])
+        let todayValid = today.hrv > 0 && today.restingHeartRate > 0
+        let confidence: ReadinessConfidence
+        switch validBaseline.count {
+        case ..<3: confidence = .low
+        case 3..<7: confidence = .medium
+        default: confidence = todayValid ? .high : .medium
+        }
+        return ReadinessResult(score: score, color: color, factors: ["Sleep \(String(format: "%.1f", today.sleepHours))h", "HRV \(Int(today.hrv)) ms", "RHR \(Int(today.restingHeartRate)) bpm"], confidence: confidence)
     }
 
     static func muscleRecovery(_ muscle: MuscleGroup, workouts: [Workout], now: Date = .now) -> Int {
         let loads = workouts.flatMap(\.sets).filter { ExerciseCatalog.muscles(for: $0.exercise).contains(muscle) }
         guard let last = loads.compactMap(\.workout).map(\.date).max() else { return 100 }
-        let hours = now.timeIntervalSince(last) / 3600
+        let hours = max(0, now.timeIntervalSince(last) / 3600)
         return min(100, Int(hours / 72 * 100))
     }
 }
@@ -43,10 +59,19 @@ enum PerformanceEngine {
         var records: [String] = []
         for set in workout.sets {
             let previous = past.flatMap(\.sets).filter { $0.normalizedExercise == set.normalizedExercise }
-            if set.estimated1RM > (previous.map(\.estimated1RM).max() ?? 0) { records.append("\(set.normalizedExercise) estimated 1RM") }
+            let previousBest = previous.map(\.estimated1RM).max()
+            if isAllowedPR(new: set.estimated1RM, previousBest: previousBest) { records.append("\(set.normalizedExercise) estimated 1RM") }
         }
-        if workout.volume > (past.map(\.volume).max() ?? 0) { records.append("Workout volume") }
+        let previousBestVolume = past.map(\.volume).max()
+        if isAllowedPR(new: workout.volume, previousBest: previousBestVolume) { records.append("Workout volume") }
         return Array(Set(records))
+    }
+
+    private static func isAllowedPR(new: Double, previousBest: Double?) -> Bool {
+        guard new > 0 else { return false }
+        guard let previousBest, previousBest > 0 else { return true }
+        guard new > previousBest else { return false }
+        return new <= previousBest * 1.4 + 1e-6
     }
 }
 
