@@ -63,3 +63,15 @@ enum RecommendationEngine {
 }
 
 private extension Array where Element == Double { var average: Double? { isEmpty ? nil : reduce(0, +) / Double(count) } }
+
+/// Pure helper for turning a workout session's start/end timestamps into a
+/// stored `durationMinutes` value.
+enum WorkoutTimerEngine {
+    /// Elapsed minutes between start and end, rounded down to the nearest whole
+    /// minute, floored at 1 minute (a workout logged in under a minute still counts
+    /// as having happened) and capped at 240 minutes (guards against a sheet left
+    /// open/backgrounded for hours before Save is tapped).
+    static func elapsedMinutes(start: Date, end: Date) -> Int {
+        max(1, min(240, Int(end.timeIntervalSince(start) / 60)))
+    }
+}

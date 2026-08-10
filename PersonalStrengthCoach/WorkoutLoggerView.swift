@@ -20,6 +20,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.modelContext) private var context
     @State private var title = "Workout"
     @State private var date = Date.now
+    @State private var sessionStart = Date.now
     @State private var exercises: [LoggedExercise] = []
     @State private var showingExercisePicker = false
     @State private var showingEmptyAlert = false
@@ -76,7 +77,7 @@ struct WorkoutLoggerView: View {
     private func save() {
         let completedExercises = exercises.filter { !$0.sets.isEmpty }
         guard !completedExercises.isEmpty else { showingEmptyAlert = true; return }
-        let workout = Workout(date: date, title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Workout" : title, durationMinutes: 0)
+        let workout = Workout(date: date, title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Workout" : title, durationMinutes: WorkoutTimerEngine.elapsedMinutes(start: sessionStart, end: .now))
         context.insert(workout)
         for exercise in completedExercises {
             for (index, loggedSet) in exercise.sets.enumerated() {

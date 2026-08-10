@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXContainerItemProxy section */
-		A1B2C3D4E5F6000000000026 /* Proxy for PersonalStrengthCoach */ = {
+		A1B2C3D4E5F6000000000026 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1B2C3D4E5F6000000000010 /* Project object */;
 			proxyType = 1;
@@ -22,7 +22,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A1B2C3D4E5F6000000000016 /* Exceptions for "PersonalStrengthCoach" folder in "PersonalStrengthCoach" target */ = {
+		A1B2C3D4E5F6000000000016 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -32,25 +32,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A1B2C3D4E5F6000000000002 /* PersonalStrengthCoach */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				A1B2C3D4E5F6000000000016 /* Exceptions for "PersonalStrengthCoach" folder in "PersonalStrengthCoach" target */,
-			);
-			explicitFileTypes = {};
-			explicitFolders = ();
-			path = PersonalStrengthCoach;
-			sourceTree = "<group>";
-		};
-		A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = PersonalStrengthCoachTests;
-			sourceTree = "<group>";
-		};
+		A1B2C3D4E5F6000000000002 /* PersonalStrengthCoach */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1B2C3D4E5F6000000000016 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = PersonalStrengthCoach; sourceTree = "<group>"; };
+		A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PersonalStrengthCoachTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A1B2C3D4E5F6000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6000000000022 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -109,6 +103,8 @@
 				A1B2C3D4E5F6000000000022 /* Frameworks */,
 				A1B2C3D4E5F6000000000023 /* Resources */,
 			);
+			buildRules = (
+			);
 			dependencies = (
 				A1B2C3D4E5F6000000000027 /* PBXTargetDependency */,
 			);
@@ -163,6 +159,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F6000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -180,27 +183,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A1B2C3D4E5F6000000000022 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A1B2C3D4E5F6000000000023 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		A1B2C3D4E5F6000000000027 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */;
-			targetProxy = A1B2C3D4E5F6000000000026 /* Proxy for PersonalStrengthCoach */;
+			targetProxy = A1B2C3D4E5F6000000000026 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

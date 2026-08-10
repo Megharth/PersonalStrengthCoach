@@ -15,6 +15,10 @@ struct ImportedWorkout: Identifiable {
     let title: String
     let date: Date
     let sets: [ImportedSet]
+    // Parsed from the Strong "Duration"/"Workout Duration" CSV column when
+    // present; JSON and share-text imports have no duration source and keep
+    // the default of 0.
+    var durationMinutes: Int = 0
 }
 
 struct StrongImportResult {
@@ -110,7 +114,7 @@ struct StrongImportView: View {
                     duplicateCount += 1
                     continue
                 }
-                let workout = Workout(date: imported.date, title: imported.title, durationMinutes: 0)
+                let workout = Workout(date: imported.date, title: imported.title, durationMinutes: imported.durationMinutes)
                 context.insert(workout)
                 for (index, importedSet) in imported.sets.enumerated() {
                     let muscle = ExerciseCatalog.muscles(for: importedSet.exercise).first ?? .core
@@ -225,7 +229,7 @@ enum StrongImportParser {
         guard let header = rows.first, header.count > 1 else { return StrongImportResult(workouts: [], skippedRows: 0, failedRows: 0) }
         let keys = header.map { $0.lowercased().replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "_", with: "") }
         func value(_ row: [String], _ names: [String]) -> String? { names.compactMap { keys.firstIndex(of: $0).flatMap { $0 < row.count ? row[$0] : nil } }.first }
-        var grouped: [String: (title: String, date: Date, sets: [ImportedSet])] = [:]
+        var grouped: [String: (title: String, date: Date, durationMinutes: Int, sets: [ImportedSet])] = [:]
         var skippedRows = 0
         var failedRows = 0
         for row in rows.dropFirst() {
@@ -236,10 +240,29 @@ enum StrongImportParser {
             guard let weightColumn = keys.firstIndex(where: { ["weight", "weightkg", "weightlb", "weightlbs", "load"].contains($0) }), weightColumn < row.count else { failedRows += 1; continue }
             guard let weight = weightKg(row[weightColumn], header: keys[weightColumn]) else { failedRows += 1; continue }
             guard let importedSet = makeSet(exercise: exercise, weight: weight, reps: reps) else { failedRows += 1; continue }
+            let durationMinutes = parseDurationMinutes(value(row, ["duration", "workoutduration"]))
             let key = "\(title)-\(Int(date.timeIntervalSince1970))"
-            grouped[key, default: (title, date, [])].sets.append(importedSet)
+            grouped[key, default: (title, date, durationMinutes, [])].sets.append(importedSet)
         }
-        return StrongImportResult(workouts: grouped.values.map { ImportedWorkout(title: $0.title, date: $0.date, sets: $0.sets) }.sorted { $0.date > $1.date }, skippedRows: skippedRows, failedRows: failedRows)
+        return StrongImportResult(workouts: grouped.values.map { ImportedWorkout(title: $0.title, date: $0.date, sets: $0.sets, durationMinutes: $0.durationMinutes) }.sorted { $0.date > $1.date }, skippedRows: skippedRows, failedRows: failedRows)
+    }
+
+    /// Parses a Strong "Duration"/"Workout Duration" CSV value into whole minutes.
+    /// Accepts a bare integer (minutes), "1h 5m"-style strings, or falls back to 0
+    /// for anything missing or unparseable. Never fails the row. Result is clamped
+    /// to 0...240 so a garbled or negative cell can't produce a nonsensical duration.
+    private static func parseDurationMinutes(_ value: String?) -> Int {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return 0 }
+        if let minutes = Int(trimmed) { return max(0, min(240, minutes)) }
+        let expression = try? NSRegularExpression(pattern: "^(?:(\\d+)h)?\\s*(?:(\\d+)m)?$", options: [.caseInsensitive])
+        let range = NSRange(trimmed.startIndex..., in: trimmed)
+        guard let match = expression?.firstMatch(in: trimmed, range: range) else { return 0 }
+        let hoursRange = Range(match.range(at: 1), in: trimmed)
+        let minutesRange = Range(match.range(at: 2), in: trimmed)
+        guard hoursRange != nil || minutesRange != nil else { return 0 }
+        let hours = hoursRange.flatMap { Int(trimmed[$0]) } ?? 0
+        let minutes = minutesRange.flatMap { Int(trimmed[$0]) } ?? 0
+        return max(0, min(240, hours * 60 + minutes))
     }
 
     /// Parses Strong's shared-workout text: an activity title, natural-language date,
