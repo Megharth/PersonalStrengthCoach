@@ -123,6 +123,7 @@ struct WorkoutHistoryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { showingLogger = true } label: { Label("Log workout", systemImage: "plus.circle") }
+                    NavigationLink { RoutinesListView() } label: { Label("Routines", systemImage: "list.bullet.rectangle") }
                     NavigationLink { StrongImportView() } label: { Label("Import from Strong", systemImage: "square.and.arrow.down") }
                 } label: { Image(systemName: "plus") }
             }

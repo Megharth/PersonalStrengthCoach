@@ -49,8 +49,9 @@ XCTests.
   returns deterministic, de-duplicated records (`1bd707e` plus current P0 work).
 
 **Remaining data model limits**
-- No **body-part/session templates or routines** — every workout is logged from
-  scratch; no way to repeat "Push Day".
+- **Routines/templates are now implemented**: saved routines can store ordered
+  exercises with target sets/reps/optional weight, and the workout logger can
+  start from a saved routine.
 - No **rest timer**, **RPE/RIR**, **warmup vs working set** flag, or **set type**
   (drop set, failure) — limits both UX and analytics quality.
 - No **bodyweight/unit preference** (kg hardcoded throughout), no per-exercise
@@ -88,9 +89,10 @@ XCTests.
   workout and exercise notes use actual PR, volume, set, and progression data.
 - [x] **Fix workout duration.** Completed in `0cc6dd7`. Manual logging captures
   bounded elapsed time, and Strong CSV imports use source duration when present.
-- [ ] **Routines / templates.** A `Routine` model (ordered exercises + target
-  sets/reps) so users can start a saved session and repeat it. Feeds better
-  recommendations and reduces logging friction.
+- [x] **Routines / templates.** Completed 2026-08-11. Added `Routine` /
+  `RoutineExercise` models, versioned SwiftData migration/export coverage,
+  routine create/edit/delete UI, and start-from-routine logging with prefilled
+  editable sets.
 
 ### P1 — Logging experience
 4. **In-workout session** with rest timer, "previous set" reference (last time

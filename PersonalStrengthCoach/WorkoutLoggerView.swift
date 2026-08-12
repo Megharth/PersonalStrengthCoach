@@ -15,6 +15,18 @@ struct LoggedExercise: Identifiable, Hashable {
     var sets: [EditableSet] = [EditableSet(), EditableSet(), EditableSet()]
 }
 
+extension LoggedExercise {
+    static func draftExercises(from routine: Routine) -> [LoggedExercise] {
+        routine.exercises.sorted { $0.order < $1.order }.map { routineExercise in
+            let setCount = max(1, routineExercise.targetSets)
+            let sets = (0..<setCount).map { _ in
+                EditableSet(weight: routineExercise.targetWeight ?? 0, reps: routineExercise.targetReps)
+            }
+            return LoggedExercise(name: routineExercise.exercise, primaryMuscle: routineExercise.primaryMuscle, sets: sets)
+        }
+    }
+}
+
 struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -23,6 +35,9 @@ struct WorkoutLoggerView: View {
     @State private var sessionStart = Date.now
     @State private var exercises: [LoggedExercise] = []
     @State private var showingExercisePicker = false
+    @State private var showingRoutinePicker = false
+    @State private var routinePendingReplacement: Routine?
+    @State private var showingRoutineReplacementConfirmation = false
     @State private var showingEmptyAlert = false
     @State private var saveError: String?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
@@ -33,6 +48,9 @@ struct WorkoutLoggerView: View {
                 Section("Workout") {
                     TextField("Workout name", text: $title)
                     DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    Button { showingRoutinePicker = true } label: {
+                        Label("Start from a routine", systemImage: "list.bullet.rectangle")
+                    }
                 }
 
                 if exercises.isEmpty {
@@ -65,6 +83,24 @@ struct WorkoutLoggerView: View {
                     showingExercisePicker = false
                 }
             }
+            .sheet(isPresented: $showingRoutinePicker) {
+                RoutineStartPicker { routine in
+                    if exercises.isEmpty {
+                        applyRoutine(routine)
+                    } else {
+                        routinePendingReplacement = routine
+                        showingRoutineReplacementConfirmation = true
+                    }
+                    showingRoutinePicker = false
+                }
+            }
+            .confirmationDialog("Replace current workout?", isPresented: $showingRoutineReplacementConfirmation, titleVisibility: .visible) {
+                Button("Replace", role: .destructive) {
+                    if let routine = routinePendingReplacement { applyRoutine(routine) }
+                    routinePendingReplacement = nil
+                }
+                Button("Keep Editing", role: .cancel) { routinePendingReplacement = nil }
+            } message: { Text("Starting from this routine will replace the exercises you've already added.") }
             .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
                 Button("OK", role: .cancel) { }
             } message: { Text("A workout needs at least one exercise and one working set.") }
@@ -72,6 +108,11 @@ struct WorkoutLoggerView: View {
                 Button("OK", role: .cancel) { }
             } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
         }
+    }
+
+    private func applyRoutine(_ routine: Routine) {
+        title = routine.name
+        exercises = LoggedExercise.draftExercises(from: routine)
     }
 
     private func save() {
@@ -129,6 +170,37 @@ private struct NumericFieldDouble: View {
     @Binding var value: Double
     let title: String
     var body: some View { TextField(title, value: $value, format: .number.precision(.fractionLength(1))).keyboardType(.decimalPad).multilineTextAlignment(.center).textFieldStyle(.roundedBorder).frame(maxWidth: 90) }
+}
+
+struct RoutineStartPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Routine.name) private var routines: [Routine]
+    let select: (Routine) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if routines.isEmpty {
+                    ContentUnavailableView("No saved routines", systemImage: "list.bullet.rectangle", description: Text("Create a routine from Workout History to start sessions faster."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(routines) { routine in
+                        Button { select(routine) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(routine.name).font(.headline)
+                                Text("\(routine.exercises.count) exercise\(routine.exercises.count == 1 ? "" : "s")")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                }
+            }
+            .navigationTitle("Start Routine")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+        }
+    }
 }
 
 struct ExercisePicker: View {
