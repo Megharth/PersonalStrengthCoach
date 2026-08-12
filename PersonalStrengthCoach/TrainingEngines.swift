@@ -152,6 +152,32 @@ enum RecommendationEngine {
     }
 }
 
+/// Builds a `Workout` from a `Routine`'s target exercises/sets. The caller owns
+/// inserting the returned workout (and its sets) into a `ModelContext` and saving —
+/// this enum has no ModelContext side effects of its own.
+enum RoutineEngine {
+    static func buildWorkout(from routine: Routine, date: Date = .now) -> Workout {
+        let workout = Workout(date: date, title: routine.name, durationMinutes: 0)
+        let orderedExercises = routine.exercises.sorted { $0.order < $1.order }
+        for routineExercise in orderedExercises {
+            let setCount = max(1, routineExercise.targetSets)
+            for setNumber in 1...setCount {
+                let set = ExerciseSet(
+                    exercise: routineExercise.exercise,
+                    normalizedExercise: routineExercise.normalizedExercise,
+                    weight: routineExercise.targetWeight ?? 0,
+                    reps: routineExercise.targetReps,
+                    setNumber: setNumber,
+                    primaryMuscle: routineExercise.primaryMuscle
+                )
+                set.workout = workout
+                workout.sets.append(set)
+            }
+        }
+        return workout
+    }
+}
+
 private extension Array where Element == Double { var average: Double? { isEmpty ? nil : reduce(0, +) / Double(count) } }
 
 /// Pure helper for turning a workout session's start/end timestamps into a

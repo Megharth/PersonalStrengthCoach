@@ -34,12 +34,29 @@ struct CustomExerciseExport: Codable {
     let createdAt: Date
 }
 
+struct RoutineExerciseExport: Codable {
+    let exercise: String
+    let normalizedExercise: String
+    let primaryMuscle: String
+    let order: Int
+    let targetSets: Int
+    let targetReps: Int
+    let targetWeight: Double?
+}
+
+struct RoutineExport: Codable {
+    let name: String
+    let createdAt: Date
+    let exercises: [RoutineExerciseExport]
+}
+
 struct PersonalStrengthExport: Codable {
     let schemaVersion: Int
     let exportedAt: Date
     let workouts: [WorkoutExport]
     let recovery: [RecoveryExport]
     let customExercises: [CustomExerciseExport]
+    let routines: [RoutineExport]
 }
 
 struct DataExportDocument: FileDocument {
@@ -57,9 +74,14 @@ enum AppSchemaV1: VersionedSchema {
     static var models: [any PersistentModel.Type] { [Workout.self, ExerciseSet.self, DailyRecovery.self, CustomExercise.self] }
 }
 
+enum AppSchemaV2: VersionedSchema {
+    static var versionIdentifier = Schema.Version(2, 0, 0)
+    static var models: [any PersistentModel.Type] { AppSchemaV1.models + [Routine.self, RoutineExercise.self] }
+}
+
 enum AppMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self] }
-    static var stages: [MigrationStage] { [] }
+    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self] }
+    static var stages: [MigrationStage] { [.lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self)] }
 }
 
 struct DataManagementView: View {
@@ -67,6 +89,7 @@ struct DataManagementView: View {
     @Query private var workouts: [Workout]
     @Query private var recovery: [DailyRecovery]
     @Query private var customExercises: [CustomExercise]
+    @Query private var routines: [Routine]
     @State private var exportDocument: DataExportDocument?
     @State private var showingExporter = false
     @State private var showingDeleteConfirmation = false
@@ -77,7 +100,7 @@ struct DataManagementView: View {
             Form {
                 Section("Your data") {
                     Button { prepareExport() } label: { Label("Export my data", systemImage: "square.and.arrow.up") }
-                    Text("Exports workouts, recovery records, and custom exercises as JSON. HealthKit history itself is not changed.")
+                    Text("Exports workouts, recovery records, custom exercises, and routines as JSON. HealthKit history itself is not changed.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Danger zone") {
@@ -102,7 +125,7 @@ struct DataManagementView: View {
 
     private func prepareExport() {
         let payload = PersonalStrengthExport(
-            schemaVersion: 1,
+            schemaVersion: 2,
             exportedAt: .now,
             workouts: workouts.map { workout in
                 WorkoutExport(date: workout.date, title: workout.title, durationMinutes: workout.durationMinutes, calories: workout.calories, notes: workout.notes, sets: workout.sets.map { set in
@@ -110,7 +133,15 @@ struct DataManagementView: View {
                 })
             },
             recovery: recovery.map { RecoveryExport(date: $0.date, sleepHours: $0.sleepHours, hrv: $0.hrv, restingHeartRate: $0.restingHeartRate, weightKg: $0.weightKg) },
-            customExercises: customExercises.map { CustomExerciseExport(name: $0.name, primaryMuscle: $0.primaryMuscleRaw, createdAt: $0.createdAt) }
+            customExercises: customExercises.map { CustomExerciseExport(name: $0.name, primaryMuscle: $0.primaryMuscleRaw, createdAt: $0.createdAt) },
+            routines: routines.map { routine in
+                // SwiftData to-many relationship array order is not guaranteed stable, so
+                // exercises must be sorted by `order` explicitly (mirrors RoutineEngine.buildWorkout).
+                let orderedExercises = routine.exercises.sorted { $0.order < $1.order }
+                return RoutineExport(name: routine.name, createdAt: routine.createdAt, exercises: orderedExercises.map { exercise in
+                    RoutineExerciseExport(exercise: exercise.exercise, normalizedExercise: exercise.normalizedExercise, primaryMuscle: exercise.primaryMuscleRaw, order: exercise.order, targetSets: exercise.targetSets, targetReps: exercise.targetReps, targetWeight: exercise.targetWeight)
+                })
+            }
         )
         do {
             let encoder = JSONEncoder()
@@ -129,6 +160,8 @@ struct DataManagementView: View {
             try context.delete(model: ExerciseSet.self)
             try context.delete(model: DailyRecovery.self)
             try context.delete(model: CustomExercise.self)
+            try context.delete(model: Routine.self)
+            try context.delete(model: RoutineExercise.self)
             try context.save()
         } catch {
             context.rollback()

@@ -55,6 +55,36 @@ final class DailyRecovery {
 }
 
 @Model
+final class Routine {
+    var name: String
+    var createdAt: Date
+    @Relationship(deleteRule: .cascade, inverse: \RoutineExercise.routine) var exercises: [RoutineExercise]
+
+    init(name: String, createdAt: Date = .now, exercises: [RoutineExercise] = []) {
+        self.name = name; self.createdAt = createdAt; self.exercises = exercises
+    }
+}
+
+@Model
+final class RoutineExercise {
+    var exercise: String
+    var normalizedExercise: String
+    var primaryMuscleRaw: String
+    var order: Int
+    var targetSets: Int
+    var targetReps: Int
+    var targetWeight: Double?
+    var routine: Routine?
+
+    init(exercise: String, normalizedExercise: String? = nil, primaryMuscle: MuscleGroup, order: Int, targetSets: Int, targetReps: Int, targetWeight: Double? = nil) {
+        self.exercise = exercise; self.normalizedExercise = normalizedExercise ?? ExerciseCatalog.normalize(exercise)
+        self.primaryMuscleRaw = primaryMuscle.rawValue; self.order = order
+        self.targetSets = targetSets; self.targetReps = targetReps; self.targetWeight = targetWeight
+    }
+    var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }
+}
+
+@Model
 final class CustomExercise {
     var name: String
     var primaryMuscleRaw: String
