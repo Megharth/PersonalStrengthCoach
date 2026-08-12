@@ -61,7 +61,22 @@ struct HomeView: View {
                     SectionTitle("Recommended today")
                     CoachCard(title: recommendation.title, detail: recommendation.detail, icon: "figure.strengthtraining.traditional")
                     SectionTitle("Coach summary")
-                    CoachCard(title: "You’re set up for a strong session", detail: "Recovery is above baseline. Chest hasn’t been trained in five days, making today a good opportunity for heavy pressing.", icon: "sparkles")
+                    if result.confidence == .low {
+                        let detail = result.factors.count == 1
+                            ? result.factors[0]
+                            : "Keep syncing Apple Health to build a reliable baseline. \(result.factors.joined(separator: " · "))"
+                        CoachCard(
+                            title: result.factors.count == 1 ? "Readiness data needed" : "Building your readiness baseline",
+                            detail: detail,
+                            icon: "sparkles"
+                        )
+                    } else {
+                        CoachCard(
+                            title: result.score >= 75 ? "Set up for a strong session" : result.score >= 55 ? "Train with steady intent" : "Prioritize recovery today",
+                            detail: "\(result.factors.joined(separator: " · ")). Suggested focus: \(recommendation.title) — \(recommendation.detail)",
+                            icon: "sparkles"
+                        )
+                    }
                 }.padding()
             }.background(Color(uiColor: .systemGroupedBackground)).navigationBarTitleDisplayMode(.inline)
         }
@@ -71,11 +86,23 @@ struct HomeView: View {
 struct DashboardView: View {
     let workouts: [Workout]; let recoveryDays: [DailyRecovery]
     var body: some View {
+        let strengthTrend = PerformanceEngine.strengthTrend(in: workouts)
         NavigationStack { ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Dashboard").font(.largeTitle.bold())
                 HStack { MetricCard(title: "Weekly Volume", value: "\(Int(PerformanceEngine.weeklyVolume(workouts) / 1_000))k", unit: "kg", icon: "dumbbell.fill", tint: .orange); MetricCard(title: "Workouts", value: "\(workouts.filter { $0.date > .now.addingTimeInterval(-604800) }.count)", unit: "this week", icon: "calendar", tint: .mint) }
-                TrendChart(title: "Strength trend", points: [92, 96, 98, 101, 105, 104, 108], tint: .mint)
+                if let strengthTrend {
+                    TrendChart(title: "Strength trend (\(strengthTrend.exercise) est. 1RM)", points: strengthTrend.points, tint: .mint)
+                } else {
+                    ContentUnavailableView(
+                        "Strength trend unavailable",
+                        systemImage: "chart.line.uptrend.xyaxis",
+                        description: Text("Log the same weighted exercise in at least two weeks to compare estimated 1RM.")
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 130)
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                }
                 TrendChart(title: "Sleep trend", points: recoveryDays.prefix(7).reversed().map { $0.sleepHours }, tint: .indigo)
                 TrendChart(title: "HRV trend", points: recoveryDays.prefix(7).reversed().map(\.hrv), tint: .pink)
             }.padding()
@@ -120,7 +147,15 @@ struct WorkoutDetailView: View {
         }
         let records = PerformanceEngine.personalRecords(in: workout, history: history)
         if !records.isEmpty { Section("Personal records") { ForEach(records, id: \.self) { Label($0, systemImage: "trophy.fill").foregroundStyle(.yellow) } } }
-        Section("Coach notes") { Text("Solid training density. Keep your compounds controlled and leave one or two reps in reserve on accessory work.") }
+        Section("Coach notes") {
+            if !records.isEmpty {
+                Text("Outstanding effort — achieved PRs in \(records.joined(separator: ", ")). Maintain steady recovery before your next heavy session.")
+            } else if workout.volume > 8_000 {
+                Text("High-volume session completed (\(Int(workout.volume).formatted()) kg). Focus on adequate protein intake and sleep tonight.")
+            } else {
+                Text("Solid training session (\(workout.sets.count) sets). Keep your compounds controlled and preserve clean technique.")
+            }
+        }
     }.navigationTitle(workout.title).navigationBarTitleDisplayMode(.inline) }
 }
 

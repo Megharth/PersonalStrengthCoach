@@ -54,6 +54,27 @@ enum PerformanceEngine {
     static func estimated1RM(for exercise: String, sets: [ExerciseSet]) -> Double {
         sets.filter { $0.normalizedExercise == ExerciseCatalog.normalize(exercise) }.map(\.estimated1RM).max() ?? 0
     }
+
+    /// Best estimated 1RM for each recorded workout containing the exercise,
+    /// ordered oldest to newest. Multiple sets in one workout produce one point.
+    static func estimated1RMHistory(for exercise: String, sets: [ExerciseSet]) -> [Double] {
+        let normalized = ExerciseCatalog.normalize(exercise)
+        let relevant = sets.filter {
+            $0.normalizedExercise == normalized && $0.estimated1RM.isFinite && $0.estimated1RM > 0
+        }
+        let linkedSets = relevant.compactMap { set -> (workout: Workout, set: ExerciseSet)? in
+            guard let workout = set.workout else { return nil }
+            return (workout, set)
+        }
+        let sessions = Dictionary(grouping: linkedSets) { ObjectIdentifier($0.workout) }
+        return sessions.values.compactMap { session -> (date: Date, best: Double)? in
+            guard let workout = session.first?.workout,
+                  let best = session.map({ $0.set.estimated1RM }).max() else { return nil }
+            return (workout.date, best)
+        }
+        .sorted { $0.date < $1.date }
+        .map(\.best)
+    }
     static func personalRecords(in workout: Workout, history: [Workout]) -> [String] {
         let past = history.filter { $0.date < workout.date }
         var records: [String] = []
@@ -64,7 +85,7 @@ enum PerformanceEngine {
         }
         let previousBestVolume = past.map(\.volume).max()
         if isAllowedPR(new: workout.volume, previousBest: previousBestVolume) { records.append("Workout volume") }
-        return Array(Set(records))
+        return Array(Set(records)).sorted()
     }
 
     private static func isAllowedPR(new: Double, previousBest: Double?) -> Bool {
@@ -72,6 +93,50 @@ enum PerformanceEngine {
         guard let previousBest, previousBest > 0 else { return true }
         guard new > previousBest else { return false }
         return new <= previousBest * 1.4 + 1e-6
+    }
+
+    /// The exercise (by normalizedExercise name) with the most logged sets across
+    /// all workouts. Returns nil if there are no sets at all. Ties are broken
+    /// alphabetically (ascending) on the normalized exercise name, for determinism.
+    /// Best estimated-1RM per trailing weekly window for the given exercise,
+    /// oldest week first, most recent week last, using half-open [start, end)
+    /// windows ending exactly at `now`. A week with zero sets for that exercise
+    /// is OMITTED from the result (not zero-filled).
+    static func weeklyEstimated1RM(for exercise: String, workouts: [Workout], weeks: Int = 7, now: Date = .now) -> [Double] {
+        let normalized = ExerciseCatalog.normalize(exercise)
+        let sets = workouts.flatMap { workout in workout.sets.map { (date: workout.date, set: $0) } }
+            .filter { $0.set.normalizedExercise == normalized && $0.set.estimated1RM.isFinite && $0.set.estimated1RM > 0 }
+        guard weeks > 0 else { return [] }
+        var results: [Double] = []
+        for i in 1...weeks {
+            let start = Calendar.current.date(byAdding: .day, value: -(weeks - i + 1) * 7, to: now) ?? now
+            let end = Calendar.current.date(byAdding: .day, value: -(weeks - i) * 7, to: now) ?? now
+            let best = sets.filter { $0.date >= start && $0.date < end }.map { $0.set.estimated1RM }.max()
+            if let best { results.append(best) }
+        }
+        return results
+    }
+
+
+    /// Chooses the exercise with the strongest usable recent trend. Preference is
+    /// given to more populated weekly histories, then more valid sets, then name.
+    static func strengthTrend(in workouts: [Workout], weeks: Int = 7, now: Date = .now) -> (exercise: String, points: [Double])? {
+        guard weeks > 0,
+              let start = Calendar.current.date(byAdding: .day, value: -weeks * 7, to: now) else { return nil }
+        let recentSets = workouts.filter { $0.date >= start && $0.date < now }.flatMap(\.sets)
+            .filter { $0.estimated1RM.isFinite && $0.estimated1RM > 0 }
+        let candidates = Dictionary(grouping: recentSets, by: \.normalizedExercise)
+        return candidates.compactMap { exercise, sets -> (exercise: String, points: [Double], setCount: Int)? in
+            let points = weeklyEstimated1RM(for: exercise, workouts: workouts, weeks: weeks, now: now)
+            guard points.count > 1 else { return nil }
+            return (exercise, points, sets.count)
+        }
+        .max { lhs, rhs in
+            if lhs.points.count != rhs.points.count { return lhs.points.count < rhs.points.count }
+            if lhs.setCount != rhs.setCount { return lhs.setCount < rhs.setCount }
+            return lhs.exercise > rhs.exercise
+        }
+        .map { ($0.exercise, $0.points) }
     }
 }
 

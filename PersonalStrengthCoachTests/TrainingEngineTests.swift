@@ -460,4 +460,216 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertEqual(result.color, "Green")
         XCTAssertEqual(result.confidence, .low)
     }
+
+    // MARK: - PerformanceEngine.weeklyEstimated1RM
+    //
+    // These tests pin down the following boundary convention for `weeks: Int, now: Date`
+    // trailing weekly windows, oldest first: with `W = weeks` and window index `i` in `1...W`
+    // (1 = oldest, W = most recent, each window half-open [start, end)):
+    //   window i = [now - (W - i + 1) * 7 days, now - (W - i) * 7 days)
+    // so the most recent window's upper bound is exactly `now`, and a set logged exactly on a
+    // 7-day boundary belongs to the *later* (start-inclusive) window, not the earlier one.
+
+    func testWeeklyEstimated1RMBoundaryDateLandsInExactlyOneWeek() {
+        // weeks = 3 windows of 7 days each, ending exactly at `now`:
+        //   window 1 (oldest):      [now - 21d, now - 14d)
+        //   window 2:               [now - 14d, now -  7d)
+        //   window 3 (most recent): [now -  7d, now)
+        // A set logged exactly at the now-14d boundary must land in window 2 (start-inclusive)
+        // and NOT window 1 (end-exclusive).
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let day: TimeInterval = 86_400
+        let markerInWindow1 = Workout(date: now.addingTimeInterval(-20 * day), title: "W1", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 10, reps: 1, setNumber: 1, primaryMuscle: .chest)
+        ])
+        let onBoundary = Workout(date: now.addingTimeInterval(-14 * day), title: "Boundary", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 100, reps: 1, setNumber: 1, primaryMuscle: .chest)
+        ])
+
+        let result = PerformanceEngine.weeklyEstimated1RM(for: "Bench Press", workouts: [markerInWindow1, onBoundary], weeks: 3, now: now)
+
+        // If the boundary date fell into window 1 instead of window 2, its much larger e1RM
+        // (103.33) would win max() for that single week, collapsing this into one element.
+        // Landing correctly in window 2 keeps the two sets in separate, ordered buckets.
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0], 10 * (1 + 1.0 / 30), accuracy: 0.0001)
+        XCTAssertEqual(result[1], 100 * (1 + 1.0 / 30), accuracy: 0.0001)
+    }
+
+    func testWeeklyEstimated1RMOmitsWeekWithNoSetsRatherThanZeroFilling() {
+        // Sets in week 1 ([-21d, -14d)) and week 3 ([-7d, now)); nothing in week 2. The result
+        // must have exactly 2 elements, not 3, and not 3 with a 0.0 placeholder for week 2.
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let day: TimeInterval = 86_400
+        let week1 = Workout(date: now.addingTimeInterval(-18 * day), title: "W1", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        ])
+        let week3 = Workout(date: now.addingTimeInterval(-3 * day), title: "W3", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 90, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        ])
+
+        let result = PerformanceEngine.weeklyEstimated1RM(for: "Bench Press", workouts: [week1, week3], weeks: 3, now: now)
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertFalse(result.contains(0.0))
+        XCTAssertEqual(result[0], 50 * (1 + 5.0 / 30), accuracy: 0.0001)
+        XCTAssertEqual(result[1], 90 * (1 + 5.0 / 30), accuracy: 0.0001)
+    }
+
+    func testWeeklyEstimated1RMTakesBestNotAverageOrSumWithinAWeek() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let day: TimeInterval = 86_400
+        let session = Workout(date: now.addingTimeInterval(-3 * day), title: "Session", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Bench Press", weight: 90, reps: 3, setNumber: 2, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Bench Press", weight: 20, reps: 10, setNumber: 3, primaryMuscle: .chest)
+        ])
+        // e1RMs: 50*(1+5/30)=58.33, 90*(1+3/30)=99, 20*(1+10/30)=26.67 -> best is 99, not the
+        // sum (~184) or the average (~61.33).
+        let expectedBest = 99.0
+
+        let result = PerformanceEngine.weeklyEstimated1RM(for: "Bench Press", workouts: [session], weeks: 3, now: now)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0], expectedBest, accuracy: 0.0001)
+    }
+
+    func testWeeklyEstimated1RMExcludesSetsForADifferentExerciseAndNormalizesAliases() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let day: TimeInterval = 86_400
+        let session = Workout(date: now.addingTimeInterval(-3 * day), title: "Session", durationMinutes: 0, sets: [
+            // "Barbell Bench Press" normalizes to "Bench Press" (ExerciseCatalog.normalize),
+            // consistent with how estimated1RM(for:sets:) already matches on normalizedExercise.
+            ExerciseSet(exercise: "Barbell Bench Press", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Squat", weight: 200, reps: 5, setNumber: 2, primaryMuscle: .quads)
+        ])
+
+        let result = PerformanceEngine.weeklyEstimated1RM(for: "Bench Press", workouts: [session], weeks: 3, now: now)
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0], 50 * (1 + 5.0 / 30), accuracy: 0.0001)
+    }
+
+    func testWeeklyEstimated1RMOrdersOldestWeekFirstAndMostRecentLast() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let day: TimeInterval = 86_400
+        let oldestWeek = Workout(date: now.addingTimeInterval(-19 * day), title: "Old", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 40, reps: 1, setNumber: 1, primaryMuscle: .chest)
+        ])
+        let mostRecentWeek = Workout(date: now.addingTimeInterval(-1 * day), title: "Recent", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 150, reps: 1, setNumber: 1, primaryMuscle: .chest)
+        ])
+
+        let result = PerformanceEngine.weeklyEstimated1RM(for: "Bench Press", workouts: [oldestWeek, mostRecentWeek], weeks: 3, now: now)
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(result[0], 40 * (1 + 1.0 / 30), accuracy: 0.0001) // oldest week's value comes first
+        XCTAssertEqual(result[1], 150 * (1 + 1.0 / 30), accuracy: 0.0001) // most recent week's value comes last
+    }
+
+
+    func testStrengthTrendPrefersExerciseWithUsableRecentHistory() {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        let day: TimeInterval = 86_400
+        let oldFavorite = Workout(date: now.addingTimeInterval(-60 * day), title: "Old", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 100, reps: 5, setNumber: 1, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Bench Press", weight: 100, reps: 5, setNumber: 2, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Bench Press", weight: 100, reps: 5, setNumber: 3, primaryMuscle: .chest)
+        ])
+        let recentSquatA = Workout(date: now.addingTimeInterval(-10 * day), title: "Squat A", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 80, reps: 5, setNumber: 1, primaryMuscle: .quads)
+        ])
+        let recentSquatB = Workout(date: now.addingTimeInterval(-2 * day), title: "Squat B", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 90, reps: 5, setNumber: 1, primaryMuscle: .quads)
+        ])
+
+        let trend = PerformanceEngine.strengthTrend(in: [oldFavorite, recentSquatA, recentSquatB], weeks: 7, now: now)
+
+        XCTAssertEqual(trend?.exercise, "Squat")
+        XCTAssertEqual(trend?.points.count, 2)
+    }
+
+    func testStrengthTrendReturnsNilWithoutTwoPopulatedWeeks() {
+        let now = Date(timeIntervalSince1970: 10_000_000)
+        let workout = Workout(date: now.addingTimeInterval(-2 * 86_400), title: "Recent", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 80, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        ])
+
+        XCTAssertNil(PerformanceEngine.strengthTrend(in: [workout], weeks: 7, now: now))
+    }
+
+    // MARK: - PerformanceEngine.personalRecords determinism
+
+    func testPersonalRecordsReturnsDeterministicallySortedOrderForMultiplePRsInOneWorkout() {
+        // Sets are logged "Squat" then "Bench Press" (not alphabetical) so that a passing test
+        // actually verifies sorting, rather than coincidentally matching insertion order.
+        let old = Workout(date: Date(timeIntervalSince1970: 100), title: "Old", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .quads),
+            ExerciseSet(exercise: "Bench Press", weight: 40, reps: 5, setNumber: 2, primaryMuscle: .chest)
+        ])
+        let current = Workout(date: Date(timeIntervalSince1970: 200), title: "Current", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 65, reps: 5, setNumber: 1, primaryMuscle: .quads),
+            ExerciseSet(exercise: "Bench Press", weight: 50, reps: 5, setNumber: 2, primaryMuscle: .chest)
+        ])
+
+        let records = PerformanceEngine.personalRecords(in: current, history: [old])
+
+        // Squat e1RM 50->75.83 (+30%), Bench Press e1RM 46.67->58.33 (+25%), volume 450->575
+        // (+27.8%) are all within the 40% single-session PR guard, so all three PRs fire; the
+        // returned order must be alphabetical, not insertion order.
+        XCTAssertEqual(records, ["Bench Press estimated 1RM", "Squat estimated 1RM", "Workout volume"])
+    }
+
+    func testPersonalRecordsReturnsOneRowPerExerciseWhenMultipleSetsBreakRecord() {
+        let old = Workout(date: Date(timeIntervalSince1970: 100), title: "Old", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        ])
+        let current = Workout(date: Date(timeIntervalSince1970: 200), title: "Current", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Bench Press", weight: 60, reps: 5, setNumber: 1, primaryMuscle: .chest),
+            ExerciseSet(exercise: "Bench Press", weight: 65, reps: 5, setNumber: 2, primaryMuscle: .chest)
+        ])
+
+        let records = PerformanceEngine.personalRecords(in: current, history: [old])
+
+        XCTAssertEqual(records.filter { $0 == "Bench Press estimated 1RM" }.count, 1)
+    }
+
+    func testEstimatedOneRMHistoryUsesBestSetPerWorkoutAndOrdersOldestFirst() {
+        let old = Workout(date: Date(timeIntervalSince1970: 100), title: "Old", durationMinutes: 0)
+        let oldLight = ExerciseSet(exercise: "Bench Press", weight: 40, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        let oldHeavy = ExerciseSet(exercise: "Bench Press", weight: 60, reps: 5, setNumber: 2, primaryMuscle: .chest)
+        oldLight.workout = old
+        oldHeavy.workout = old
+        old.sets = [oldLight, oldHeavy]
+
+        let current = Workout(date: Date(timeIntervalSince1970: 200), title: "Current", durationMinutes: 0)
+        let currentSet = ExerciseSet(exercise: "Bench Press", weight: 70, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        currentSet.workout = current
+        current.sets = [currentSet]
+
+        let history = PerformanceEngine.estimated1RMHistory(for: "Bench Press", sets: [currentSet, oldLight, oldHeavy])
+
+        XCTAssertEqual(history.count, 2)
+        XCTAssertEqual(history[0], oldHeavy.estimated1RM, accuracy: 0.0001)
+        XCTAssertEqual(history[1], currentSet.estimated1RM, accuracy: 0.0001)
+    }
+
+
+    func testEstimatedOneRMHistoryKeepsDistinctWorkoutsWithSameTimestamp() {
+        let date = Date(timeIntervalSince1970: 100)
+        let first = Workout(date: date, title: "First", durationMinutes: 0)
+        let firstSet = ExerciseSet(exercise: "Bench Press", weight: 50, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        firstSet.workout = first
+        first.sets = [firstSet]
+
+        let second = Workout(date: date, title: "Second", durationMinutes: 0)
+        let secondSet = ExerciseSet(exercise: "Bench Press", weight: 70, reps: 5, setNumber: 1, primaryMuscle: .chest)
+        secondSet.workout = second
+        second.sets = [secondSet]
+
+        let history = PerformanceEngine.estimated1RMHistory(for: "Bench Press", sets: [firstSet, secondSet])
+
+        XCTAssertEqual(history.count, 2)
+        XCTAssertEqual(Set(history), Set([firstSet.estimated1RM, secondSet.estimated1RM]))
+    }
 }
