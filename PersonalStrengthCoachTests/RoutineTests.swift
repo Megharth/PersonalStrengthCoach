@@ -138,31 +138,30 @@ final class RoutineEngineBuildWorkoutTests: XCTestCase {
 // MARK: - Group B: SwiftData in-memory container tests
 //
 // New harness: nothing in the codebase constructs a ModelContainer in tests yet, so this
-// establishes a minimal, per-test in-memory container built from AppSchemaV2 + AppMigrationPlan.
+// establishes a minimal, per-test in-memory container built from the current app schema.
 
 final class RoutinePersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV2.models),
+            for: Schema(AppSchemaV3.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }
 
-    func testAppSchemaV2ContainerBuildsWithMigrationPlan() throws {
-        // This is the project's first non-empty migration stage: the migration plan must
-        // resolve and a container must construct without throwing.
+    func testAppSchemaV3ContainerBuildsWithMigrationPlan() throws {
+        // The migration plan must resolve and a container must construct without throwing.
         let container = try makeInMemoryContainer()
 
         XCTAssertNotNil(container)
     }
 
-    func testAppSchemaV2IncludesRoutineAndRoutineExerciseModels() {
-        let v2Names = Set(AppSchemaV2.models.map { String(describing: $0) })
-        XCTAssertTrue(v2Names.contains(String(describing: Routine.self)))
-        XCTAssertTrue(v2Names.contains(String(describing: RoutineExercise.self)))
+    func testCurrentSchemaIncludesTopLevelRoutineAndRoutineExerciseModels() {
+        let v3Types = Set(AppSchemaV3.models.map { ObjectIdentifier($0) })
+        XCTAssertTrue(v3Types.contains(ObjectIdentifier(Routine.self)))
+        XCTAssertTrue(v3Types.contains(ObjectIdentifier(RoutineExercise.self)))
 
-        // AppSchemaV1 is the historical anchor and must not be edited to include the new models.
+        // AppSchemaV1 is the historical anchor and must not be edited to include routine models.
         let v1Names = Set(AppSchemaV1.models.map { String(describing: $0) })
         XCTAssertFalse(v1Names.contains(String(describing: Routine.self)))
         XCTAssertFalse(v1Names.contains(String(describing: RoutineExercise.self)))

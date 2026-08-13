@@ -317,11 +317,13 @@ Sweet spot ≈ 0.8–1.3; >1.5 is the commonly cited spike zone (treat as a well
 2. e1RM stagnation: rolling regression slope of e1RM per key lift ≤ 0 over 3–4 weeks.
 3. Recovery drift: 3+ consecutive days of negative RHR/HRV z-score trend.
 
-**HealthKit ingestion hardening**
+**HealthKit ingestion hardening — complete 2026-08-12**
 - Reject physiologically impossible samples before averaging (RHR ~30–120 bpm, HRV SDNN ~1–200 ms, sleep 0–16h).
 - Use median/trimmed mean for multi-sample days; filter exercise-artifact readings.
-- Store per-day sample counts (`hrvSampleCount`, etc.) so the engine distinguishes "0 = no data" from "0 = genuinely zero" and the UI can show low-confidence days.
-- Distinguish authorization-denied from no-data-yet.
+- Store per-day sample counts (`hrvSampleCount`, etc.) so the engine can distinguish "0 = no data" from "0 = genuinely zero". **Storage only** — `RecoveryEngine` and the UI do not read these fields yet; wiring them into confidence output remains open.
+- Surface knowable HealthKit states truthfully: unavailable, not determined, synced, no readable data, or failed, without falsely claiming read denial when iOS cannot expose that state.
+- Body mass is same-day only (no carry-forward), so `bodyMassSampleCount == 0` means "not weighed that day".
+- Caveat: `DailyRecovery` rows written before this change backfill all sample counts to `0` and the 15-day sync window never revisits them, so pre-upgrade history older than 15 days will read as zero-confidence once a consumer exists.
 
 **Better e1RM**
 - Rep-range-appropriate formula selection or an Epley+Brzycki ensemble (`Brzycki: weight * 36/(37-reps)`); exclude sets with reps > ~12 from e1RM/PR logic.
@@ -344,7 +346,7 @@ Sweet spot ≈ 0.8–1.3; >1.5 is the commonly cited spike zone (treat as a well
 | Priority | Item | Status | New HealthKit types? |
 |---|---|---|---|
 | P0 (correctness) | Guard divide-by-zero/NaN in readiness; clamp negative recovery hours; PR sanity guard | **Complete — 2026-08-11** | None |
-| P0 (ingestion) | Reject physiologically impossible HealthKit samples before storage | Open | None |
+| P0 (ingestion) | Reject physiologically impossible HealthKit samples before storage | **Complete — 2026-08-12** | None |
 | P0 | Confidence/insufficient-data output (min-N baseline gate) | **Complete — 2026-08-11** | None |
 | P1 | z-score + rolling-SD baseline for HRV(log)/RHR/sleep; ACWR replaces load bonus | Open | None |
 | P1 | Volume-weighted per-muscle decay recovery model | Open | None (needs a muscle-contribution table — content work) |

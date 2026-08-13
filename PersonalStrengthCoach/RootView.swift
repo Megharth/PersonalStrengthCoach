@@ -7,7 +7,7 @@ struct RootView: View {
     @Query(sort: \Workout.date, order: .reverse) private var workouts: [Workout]
     @Query(sort: \DailyRecovery.date, order: .reverse) private var recoveryDays: [DailyRecovery]
     @State private var selectedTab = 0
-    @State private var healthKitError: String?
+    @State private var healthKitAlert: HealthKitAlert?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "HealthKit")
 
     var body: some View {
@@ -26,20 +26,32 @@ struct RootView: View {
             #endif
             await syncHealthKit()
         }
-        .alert("Couldn’t sync Health data", isPresented: Binding(get: { healthKitError != nil }, set: { if !$0 { healthKitError = nil } })) {
+        .alert(healthKitAlert?.title ?? "Health data", isPresented: Binding(get: { healthKitAlert != nil }, set: { if !$0 { healthKitAlert = nil } })) {
             Button("Retry") { Task { await syncHealthKit() } }
             Button("Not now", role: .cancel) { }
-        } message: { Text(healthKitError ?? "Health data could not be refreshed.") }
+        } message: { Text(healthKitAlert?.message ?? "Health data could not be refreshed.") }
     }
 
     private func syncHealthKit() async {
-        do {
-            try await HealthKitService.sync(context: context)
-        } catch {
-            logger.error("HealthKit sync failed")
-            healthKitError = "Check Health permissions and try again."
+        let status = await HealthKitService.sync(context: context)
+        switch status {
+        case .unavailable, .notDetermined, .synced:
+            healthKitAlert = nil
+        case .noReadableData:
+            healthKitAlert = HealthKitAlert(
+                title: "No readable Health data",
+                message: "No readable Apple Health recovery data yet. Check that Personal Strength Coach can read Sleep, Heart Rate, HRV, and Body Mass in the Health app."
+            )
+        case .failed(let message):
+            logger.error("HealthKit sync failed: \(message, privacy: .public)")
+            healthKitAlert = HealthKitAlert(title: "Couldn’t sync Health data", message: "Check Health permissions and try again.")
         }
     }
+}
+
+private struct HealthKitAlert {
+    let title: String
+    let message: String
 }
 
 struct HomeView: View {

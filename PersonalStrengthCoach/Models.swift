@@ -49,8 +49,31 @@ final class DailyRecovery {
     var hrv: Double
     var restingHeartRate: Double
     var weightKg: Double
-    init(date: Date, sleepHours: Double, hrv: Double, restingHeartRate: Double, weightKg: Double) {
-        self.date = date; self.sleepHours = sleepHours; self.hrv = hrv; self.restingHeartRate = restingHeartRate; self.weightKg = weightKg
+    var sleepSampleCount: Int = 0
+    var hrvSampleCount: Int = 0
+    var restingHeartRateSampleCount: Int = 0
+    var bodyMassSampleCount: Int = 0
+
+    init(
+        date: Date,
+        sleepHours: Double,
+        hrv: Double,
+        restingHeartRate: Double,
+        weightKg: Double,
+        sleepSampleCount: Int = 0,
+        hrvSampleCount: Int = 0,
+        restingHeartRateSampleCount: Int = 0,
+        bodyMassSampleCount: Int = 0
+    ) {
+        self.date = date
+        self.sleepHours = sleepHours
+        self.hrv = hrv
+        self.restingHeartRate = restingHeartRate
+        self.weightKg = weightKg
+        self.sleepSampleCount = sleepSampleCount
+        self.hrvSampleCount = hrvSampleCount
+        self.restingHeartRateSampleCount = restingHeartRateSampleCount
+        self.bodyMassSampleCount = bodyMassSampleCount
     }
 }
 
