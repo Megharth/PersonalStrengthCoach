@@ -1,6 +1,6 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-11
+**Status:** Active · **Last updated:** 2026-08-13
 
 This document proposes features and improvements for Personal Strength Coach, an
 on-device iOS strength-training tracker (SwiftUI + SwiftData, Apple frameworks
@@ -93,11 +93,22 @@ XCTests.
   `RoutineExercise` models, versioned SwiftData migration/export coverage,
   routine create/edit/delete UI, and start-from-routine logging with prefilled
   editable sets.
+- [x] **Edit and delete logged workouts.** Completed 2026-08-13 — scoped in §4.1,
+  shipped as one slice (delete + edit together). `WorkoutLoggerView` is now
+  dual-mode: it prefills from an existing workout and diffs its sets on save,
+  preserving `calories`/`notes` by reusing the model. Delete is available from
+  History (swipe) and from a workout's detail view, both behind a confirmation.
+  Duration became editable, but **only when editing** — new workouts keep the
+  automatic session timer, and both paths clamp through
+  `WorkoutTimerEngine.clampedMinutes`.
 
 ### P1 — Logging experience
-4. **In-workout session** with rest timer, "previous set" reference (last time
-   you did this exercise, shown inline), and running volume. Persist a
-   `WorkoutInProgress` so backgrounding/crash doesn't lose data.
+4. **In-workout session** with rest timer and running volume. Persist a
+   `WorkoutInProgress` so backgrounding/crash doesn't lose data. *(The
+   "previous set" reference was split out of this item — see 4a, which ships
+   independently of the timer and persistence work.)*
+   - **4a. Previous-set reference in the logger** — top of the P1 logging
+     queue. Scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
    Unlocks autoregulation and cleaner volume math (exclude warmups).
 6. **Plate calculator** and **unit preference** (kg/lb) app-wide.
@@ -371,3 +382,136 @@ not by editing `Models.swift` in place; calc changes get tests in
 - Frame every score as a wellness/training-load trend indicator, not a diagnostic claim (avoid "overtraining syndrome," "injury risk").
 - Keep computation on-device; `AIInsightService` should continue to send only derived summary numbers to the proxy, never raw per-sample HRV/sleep data.
 - Nothing proposed adds regulatory exposure; re-review authorization copy if respiratory rate/SpO2 are ever added.
+
+---
+
+## 4. Addendum — logging corrections & reference (2026-08-13)
+
+Two requested features, scoped. Neither needs a schema change, a new HealthKit
+type, or a third-party dependency. Priority was set as: **4.1 is P0**
+(data-correctness / trust), **4.2 is the top of the P1 logging queue**.
+
+### 4.1 Edit and delete logged workouts — **P0** — *shipped 2026-08-13*
+
+**Why P0.** Every logged workout was write-once. `WorkoutLoggerView` was a
+one-shot sheet, `WorkoutDetailView` was read-only, and `WorkoutHistoryView` had
+no `.onDelete` or swipe actions — routines had create/edit/delete
+(`RoutinesView.swift:75`) but workouts didn't. So a single fat-fingered `500`
+instead of `50`:
+
+- becomes a permanent PR that suppresses every future PR on that lift,
+- inflates the estimated-1RM trend and the Dashboard strength series,
+- corrupts weekly volume, the readiness load term, and muscle recovery,
+- and ships into the `AIInsightService` proxy payload as fact.
+
+The engine-side PR sanity guard (§3.2, complete) rejects implausible *jumps* but
+cannot undo a bad row, and the only existing escape hatch is "delete all local
+data" in Settings — losing all history to fix one set. This is the same trust
+class as the completed P0 items in §2 and should land before further P1 work.
+
+**Scope**
+- **Delete a workout** from `WorkoutHistoryView` via `.onDelete` / swipe action,
+  plus a destructive action in `WorkoutDetailView`. Confirm before deleting
+  (`.confirmationDialog`) — this is unrecoverable, there is no undo or trash.
+  `Workout` → `ExerciseSet` is already a cascade relationship, so deleting the
+  workout removes its sets; verify no orphaned `ExerciseSet` rows remain.
+- **Edit a workout** — reuse `WorkoutLoggerView` in an "edit existing" mode
+  rather than building a second editor: load the workout's title, date, and sets
+  into the existing `LoggedExercise`/`EditableSet` drafts, and on save diff
+  against the stored sets instead of inserting a new `Workout`. Editable fields:
+  title, date, per-set weight/reps, add/remove sets, add/remove exercises.
+  `durationMinutes` stays as captured (`WorkoutTimerEngine`) — offer it as an
+  editable field only if it's cheap; don't recompute it from a new `.now`.
+- **Re-derivation.** Everything downstream (PRs, e1RM, volume, recovery,
+  readiness load) is computed on read by the pure engines in
+  `TrainingEngines.swift`, so an edit or delete should propagate with no cached
+  state to invalidate. Confirm that assumption holds — any place that snapshots a
+  derived value needs invalidating too.
+- **Import parity.** Strong-imported workouts are ordinary `Workout` rows, so
+  they get the same edit/delete affordances for free.
+
+**Non-goals for the first pass:** undo/restore, edit history/audit trail,
+bulk-edit, and editing `normalizedExercise` (changing an exercise's identity
+re-buckets it across every analytic — treat as remove-and-re-add instead).
+
+**Risks**
+- Deleting the workout that established a PR silently changes historical PR
+  copy — acceptable and correct, but worth a line in `FEATURES.md`.
+- Editing a set that a previous session's "previous set" reference (§4.2) pointed
+  at changes that reference retroactively. Also correct; no mitigation needed.
+- **Saving an edit renumbers `setNumber` to restart at 1 per exercise block**
+  (the logger's contract), while `SeedData` and Strong imports number sets
+  continuously across the session. `StrongImportView.isDuplicate`
+  (`StrongImportView.swift:137-146`) sorts stored sets by `setNumber` and zips
+  them against the imported order, so re-importing the source CSV may no longer
+  dedupe against an edited workout and can create a duplicate. Accepted: the
+  affected case is edit-then-reimport-the-same-file, and the alternative is
+  persisting intra-workout ordering, which this slice explicitly avoids.
+- **Two same-name exercise blocks in one workout merge into one on edit.**
+  `ExerciseSet` stores no intra-workout ordering, so nothing says which `1`
+  starts which block. Every set, weight, and rep survives — only the split is
+  lost, and no analytic reads `setNumber`.
+
+**Tests** (`WorkoutEditingTests.swift`, shipped): `WorkoutEditorLogicTests`
+covers the pure prefill/diff logic (groups by raw `exercise` not
+`normalizedExercise`, orders by `setNumber`, wires `existingModel` identity,
+merges duplicate blocks); `WorkoutEditingPersistenceTests` uses an in-memory
+container for deleting a workout cascading its sets, a sibling workout being
+unaffected, deleting the PR-setting workout promoting the next-best lift,
+editing a set's weight changing `Workout.volume` and the recomputed estimated
+1RM, editing down a typo'd 500 kg set removing the bogus PR, and
+`calories`/`notes`/`durationMinutes` surviving an edit.
+
+### 4.2 Previous-set reference in the logger — **P1 (top of the logging queue)**
+
+**Already in the spec, but gated.** This is the "previous set" clause of P1 item
+4 (§2) and the "Previous-set reference" / "'Last time' reference in the logger"
+entries in the UI review (§3.1). It is **not implemented** — nothing in
+`PersonalStrengthCoach/` reads prior sets into the logger. Splitting it out as
+**4a** because it needs neither the rest timer nor `WorkoutInProgress`
+persistence, which are what make item 4 large.
+
+**Scope**
+- In `ExerciseLoggerCard` (`WorkoutLoggerView.swift:140`), show the most recent
+  prior performance for that exercise as secondary text under the header — e.g.
+  `Last: 60 × 8, 60 × 8, 62.5 × 6 · 12 days ago`.
+- **Lookup:** most recent `Workout` (excluding the in-progress one) containing an
+  `ExerciseSet` whose `normalizedExercise` matches the drafted exercise; take
+  that workout's sets for the exercise in `setNumber` order. Normalization
+  already exists via `ExerciseCatalog.normalize`, so "Bench Press" and "Barbell
+  Bench Press" resolve together.
+- **Per-set inline hint** (secondary): dim placeholder on each set row showing
+  the matching set number from last time, so set 3 shows what set 3 was.
+- **Empty state:** first time doing an exercise → "First time logging this" or
+  no row at all; never render a `0 × 0` placeholder.
+- **Staleness:** show relative age; consider de-emphasizing references older
+  than ~8 weeks rather than hiding them.
+- **Prefill is a separate decision.** Displaying last time's numbers is
+  unambiguously useful; *defaulting* the new set to them is a product choice that
+  interacts with the existing `weight: 0, reps: 8` default the UI review flagged
+  (§3.1). Ship display first; evaluate prefill (and a tap-to-fill affordance)
+  after using it.
+- **Routine interaction:** when starting from a routine, the routine's target
+  sets/reps/weight already prefill the draft — show the previous-set reference
+  *alongside* the target, not instead of it, so target vs. actual stay distinct.
+
+**Performance:** one lookup per drafted exercise, over `@Query`-loaded workouts
+sorted by date descending — cheap at personal-history scale. If the logger's
+exercise list grows long, resolve all references in a single pass over recent
+workouts rather than per-card queries.
+
+**Tests** (`TrainingEngineTests.swift` or a focused `PreviousSetTests.swift`):
+picks the most recent prior workout, not the highest-volume one; matches across
+name variants via `normalizedExercise`; excludes the in-progress workout;
+returns nil for a first-time exercise; orders sets by `setNumber`.
+
+### 4.3 Sequencing
+
+1. ~~**4.1 delete**~~ / ~~**4.1 edit**~~ — shipped together on 2026-08-13 rather
+   than as two slices: they share the confirmation and navigation plumbing, and
+   delete alone still leaves "lose the whole session to fix one set".
+2. **4.2 previous-set display** — independent of 4.1; only touches
+   `ExerciseLoggerCard` and a lookup helper. Next in this section.
+
+Deferred to the original item 4: rest timer, running volume, `WorkoutInProgress`
+persistence, prefill-from-last-time.

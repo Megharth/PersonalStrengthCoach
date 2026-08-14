@@ -123,12 +123,27 @@ struct DashboardView: View {
 }
 
 struct WorkoutHistoryView: View {
+    @Environment(\.modelContext) private var context
     let workouts: [Workout]
     @State private var showingLogger = false
+    @State private var workoutPendingDeletion: Workout?
+    @State private var errorMessage: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
+
     var body: some View { NavigationStack { List {
+        if workouts.isEmpty {
+            ContentUnavailableView("No workouts yet", systemImage: "dumbbell.fill", description: Text("Log your first session from the + menu to start tracking volume, PRs, and recovery."))
+                .listRowBackground(Color.clear)
+        } else {
         ForEach(workouts) { workout in NavigationLink { WorkoutDetailView(workout: workout, history: workouts) } label: {
             HStack { Image(systemName: "dumbbell.fill").foregroundStyle(.mint).frame(width: 30); VStack(alignment: .leading) { Text(workout.title).font(.headline); Text(workout.date.formatted(date: .abbreviated, time: .omitted)).foregroundStyle(.secondary) }; Spacer(); VStack(alignment: .trailing) { Text("\(Int(workout.volume).formatted()) kg").font(.subheadline.weight(.semibold)); Text("\(workout.durationMinutes) min").font(.caption).foregroundStyle(.secondary) } }
         } }
+        // Swipe arms the confirmation rather than deleting outright — this is
+        // unrecoverable and `.onDelete` has no built-in confirmation.
+        .onDelete { offsets in
+            workoutPendingDeletion = offsets.compactMap { workouts.indices.contains($0) ? workouts[$0] : nil }.first
+        }
+        }
         }
         .navigationTitle("Workout History")
         .toolbar {
@@ -141,11 +156,38 @@ struct WorkoutHistoryView: View {
             }
         }
         .sheet(isPresented: $showingLogger) { WorkoutLoggerView() }
+        .confirmationDialog("Delete workout?", isPresented: Binding(get: { workoutPendingDeletion != nil }, set: { if !$0 { workoutPendingDeletion = nil } }), titleVisibility: .visible) {
+            Button("Delete Workout", role: .destructive) {
+                if let workout = workoutPendingDeletion { delete(workout) }
+                workoutPendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) { workoutPendingDeletion = nil }
+        } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
+        .alert("Couldn’t update workouts", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) { }
+        } message: { Text(errorMessage ?? "Please try again.") }
     } }
+
+    private func delete(_ workout: Workout) {
+        context.delete(workout)     // cascade removes its ExerciseSet rows
+        do {
+            try context.save()
+        } catch {
+            logger.error("Workout delete failed")
+            context.rollback()
+            errorMessage = "The workout could not be deleted."
+        }
+    }
 }
 
 struct WorkoutDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     let workout: Workout; let history: [Workout]
+    @State private var showingEditor = false
+    @State private var showingDeleteConfirmation = false
+    @State private var deleteError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
     private var groupedExercises: [(name: String, sets: [ExerciseSet])] {
         Dictionary(grouping: workout.sets, by: \.normalizedExercise)
             .map { (name: $0.key, sets: $0.value) }
@@ -169,7 +211,38 @@ struct WorkoutDetailView: View {
                 Text("Solid training session (\(workout.sets.count) sets). Keep your compounds controlled and preserve clean technique.")
             }
         }
-    }.navigationTitle(workout.title).navigationBarTitleDisplayMode(.inline) }
+        Section {
+            Button("Delete Workout", role: .destructive) { showingDeleteConfirmation = true }
+        }
+    }
+    .navigationTitle(workout.title).navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button { showingEditor = true } label: { Label("Edit Workout", systemImage: "pencil") }
+        }
+    }
+    // WorkoutLoggerView owns its own NavigationStack, so present it bare.
+    .sheet(isPresented: $showingEditor) { WorkoutLoggerView(workout: workout) }
+    .confirmationDialog("Delete workout?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+        Button("Delete Workout", role: .destructive) { deleteWorkout() }
+        Button("Cancel", role: .cancel) { }
+    } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
+    .alert("Couldn’t delete workout", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+        Button("OK", role: .cancel) { }
+    } message: { Text(deleteError ?? "Please try again.") }
+    }
+
+    private func deleteWorkout() {
+        context.delete(workout)     // cascade removes its ExerciseSet rows
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            logger.error("Workout delete failed")
+            context.rollback()
+            deleteError = "The workout could not be deleted."
+        }
+    }
 }
 
 private struct ExerciseRow: View {

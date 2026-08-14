@@ -65,4 +65,20 @@ final class WorkoutTimerEngineTests: XCTestCase {
 
         XCTAssertEqual(WorkoutTimerEngine.elapsedMinutes(start: start, end: end), 240)
     }
+
+    func testClampedMinutesFloorsAtOne() {
+        XCTAssertEqual(WorkoutTimerEngine.clampedMinutes(0), 1)
+    }
+
+    func testClampedMinutesFloorsNegativeValuesAtOne() {
+        XCTAssertEqual(WorkoutTimerEngine.clampedMinutes(-30), 1)
+    }
+
+    func testClampedMinutesCapsAtTwoHundredForty() {
+        XCTAssertEqual(WorkoutTimerEngine.clampedMinutes(300), 240)
+    }
+
+    func testClampedMinutesPassesValuesInRangeThrough() {
+        XCTAssertEqual(WorkoutTimerEngine.clampedMinutes(68), 68)
+    }
 }

@@ -188,6 +188,13 @@ enum WorkoutTimerEngine {
     /// as having happened) and capped at 240 minutes (guards against a sheet left
     /// open/backgrounded for hours before Save is tapped).
     static func elapsedMinutes(start: Date, end: Date) -> Int {
-        max(1, min(240, Int(end.timeIntervalSince(start) / 60)))
+        clampedMinutes(Int(end.timeIntervalSince(start) / 60))
+    }
+
+    /// Clamps a minute count into the same `[1, 240]` range `elapsedMinutes`
+    /// produces, so a manually edited duration can't fall outside the bounds an
+    /// auto-captured one respects.
+    static func clampedMinutes(_ minutes: Int) -> Int {
+        max(1, min(240, minutes))
     }
 }
