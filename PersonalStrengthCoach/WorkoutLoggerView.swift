@@ -33,6 +33,15 @@ struct LoggedExercise: Identifiable, Hashable {
 }
 
 extension LoggedExercise {
+    static func draftExercise(
+        from exercise: LibraryExercise,
+        previous: PreviousSetPerformance? = nil
+    ) -> LoggedExercise {
+        let sets = previous?.sets.map { EditableSet(weight: $0.weight, reps: $0.reps) }
+            ?? [EditableSet(), EditableSet(), EditableSet()]
+        return LoggedExercise(name: exercise.name, primaryMuscle: exercise.primaryMuscle, sets: sets)
+    }
+
     static func draftExercises(from routine: Routine) -> [LoggedExercise] {
         routine.exercises.sorted { $0.order < $1.order }.map { routineExercise in
             let setCount = max(1, routineExercise.targetSets)
@@ -82,6 +91,7 @@ enum WorkoutEditorLogic {
 struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     let workout: Workout?          // nil == log a new workout
     @State private var title = "Workout"
     @State private var date = Date.now
@@ -128,7 +138,14 @@ struct WorkoutLoggerView: View {
                 }
 
                 ForEach($exercises) { $exercise in
-                    ExerciseLoggerCard(exercise: $exercise) {
+                    ExerciseLoggerCard(
+                        exercise: $exercise,
+                        previous: PreviousSetEngine.mostRecentPerformance(
+                            for: exercise.name,
+                            in: allWorkouts,
+                            excluding: workout
+                        )
+                    ) {
                         exercises.removeAll { $0.id == exercise.id }
                     }
                 }
@@ -149,7 +166,12 @@ struct WorkoutLoggerView: View {
             }
             .sheet(isPresented: $showingExercisePicker) {
                 ExercisePicker { exercise in
-                    exercises.append(LoggedExercise(name: exercise.name, primaryMuscle: exercise.primaryMuscle))
+                    let previous = PreviousSetEngine.mostRecentPerformance(
+                        for: exercise.name,
+                        in: allWorkouts,
+                        excluding: workout
+                    )
+                    exercises.append(LoggedExercise.draftExercise(from: exercise, previous: previous))
                     showingExercisePicker = false
                 }
             }
@@ -249,24 +271,63 @@ struct WorkoutLoggerView: View {
 
 private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
+    let previous: PreviousSetPerformance?
     let remove: () -> Void
+
+    private var previousSummary: String? {
+        guard let previous else { return nil }
+        let sets = previous.sets.map { "\(Self.formatWeight($0.weight)) × \($0.reps)" }.joined(separator: ", ")
+        let age = RelativeDateTimeFormatter().localizedString(for: previous.date, relativeTo: .now)
+        return "Last: \(sets) · \(age)"
+    }
+
+    private var previousTextColor: Color {
+        previous?.isStale == true ? Color.secondary.opacity(0.55) : Color.secondary
+    }
+
+    static func formatWeight(_ weight: Double) -> String {
+        weight.rounded() == weight ? String(Int(weight)) : String(format: "%.1f", weight)
+    }
 
     var body: some View {
         Section {
             ForEach($exercise.sets) { $set in
+                let index = exercise.sets.firstIndex(where: { $0.id == set.id }) ?? 0
                 HStack {
-                    Text("\(exercise.sets.firstIndex(where: { $0.id == set.id }).map { $0 + 1 } ?? 0)")
+                    Text("\(index + 1)")
                         .font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 18)
                     NumericFieldDouble(value: $set.weight, title: "kg")
                     NumericFieldInt(value: $set.reps, title: "reps")
+                    if let previousSet = previous?.sets[safe: index] {
+                        Text("\(Self.formatWeight(previousSet.weight)) × \(previousSet.reps)")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                     Button(role: .destructive) { exercise.sets.removeAll { $0.id == set.id } } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.borderless)
                 }
             }
             Button { exercise.sets.append(EditableSet()) } label: { Label("Add set", systemImage: "plus") }
         } header: {
-            HStack { VStack(alignment: .leading) { Text(exercise.name).font(.headline); Text(exercise.primaryMuscle.rawValue).font(.caption).foregroundStyle(.secondary) }; Spacer(); Button(role: .destructive, action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless) }
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(exercise.name).font(.headline)
+                    Text(exercise.primaryMuscle.rawValue).font(.caption).foregroundStyle(.secondary)
+                    if let previousSummary {
+                        Text(previousSummary).font(.caption).foregroundStyle(previousTextColor)
+                    }
+                }
+                Spacer()
+                Button(role: .destructive, action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless)
+            }
         }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Index) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 

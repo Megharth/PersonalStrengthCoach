@@ -155,6 +155,45 @@ enum RecommendationEngine {
 /// Builds a `Workout` from a `Routine`'s target exercises/sets. The caller owns
 /// inserting the returned workout (and its sets) into a `ModelContext` and saving —
 /// this enum has no ModelContext side effects of its own.
+struct PreviousSetPerformance {
+    let sets: [ExerciseSet]
+    let date: Date
+
+    var isStale: Bool {
+        date < Date.now.addingTimeInterval(-56 * 86_400)
+    }
+}
+
+enum PreviousSetEngine {
+    /// Returns the most recent workout containing this exercise, excluding the
+    /// workout currently being edited. Matching uses the same normalized name
+    /// as the rest of the training engines.
+    static func mostRecentPerformance(
+        for exercise: String,
+        in workouts: [Workout],
+        excluding excludedWorkout: Workout? = nil
+    ) -> PreviousSetPerformance? {
+        let normalized = ExerciseCatalog.normalize(exercise)
+        let candidates = workouts.enumerated().compactMap { index, workout -> (index: Int, workout: Workout, sets: [ExerciseSet])? in
+            guard workout !== excludedWorkout else { return nil }
+            let sets = workout.sets
+                .filter { $0.normalizedExercise == normalized }
+                .sorted { lhs, rhs in
+                    if lhs.setNumber != rhs.setNumber { return lhs.setNumber < rhs.setNumber }
+                    if lhs.weight != rhs.weight { return lhs.weight < rhs.weight }
+                    return lhs.reps < rhs.reps
+                }
+            guard !sets.isEmpty else { return nil }
+            return (index, workout, sets)
+        }
+        guard let candidate = candidates.min(by: { lhs, rhs in
+            if lhs.workout.date != rhs.workout.date { return lhs.workout.date > rhs.workout.date }
+            return lhs.index < rhs.index
+        }) else { return nil }
+        return PreviousSetPerformance(sets: candidate.sets, date: candidate.workout.date)
+    }
+}
+
 enum RoutineEngine {
     static func buildWorkout(from routine: Routine, date: Date = .now) -> Workout {
         let workout = Workout(date: date, title: routine.name, durationMinutes: 0)

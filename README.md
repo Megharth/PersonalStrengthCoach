@@ -4,7 +4,7 @@ An iOS strength-training tracker built with SwiftUI and SwiftData. It keeps work
 
 ## Features
 
-- Log workouts, exercises, sets, weight, and reps
+- Log workouts, exercises, sets, weight, and reps; newly added exercises prefill editable sets from recent history
 - Use the built-in exercise library or add custom exercises
 - Import Strong exports from CSV, JSON, or shared-workout text
 - Track volume, estimated one-rep max, and personal records

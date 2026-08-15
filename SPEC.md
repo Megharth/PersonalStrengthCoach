@@ -1,6 +1,6 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-13
+**Status:** Active · **Last updated:** 2026-08-15
 
 This document proposes features and improvements for Personal Strength Coach, an
 on-device iOS strength-training tracker (SwiftUI + SwiftData, Apple frameworks
@@ -23,8 +23,9 @@ XCTests.
 ### What the app does today
 
 - **Logging** — manual workout logging (`WorkoutLoggerView`) with an exercise
-  picker over a seeded library + user-created custom exercises; Strong app
-  import (CSV/JSON/shared text).
+  picker over a seeded library + user-created custom exercises; newly added
+  exercises prefill editable sets from the most recent matching workout; Strong
+  app import (CSV/JSON/shared text).
 - **Recovery** — read-only HealthKit sync (`HealthKitService`) of the last 15
   days of sleep, HRV, resting HR, and body mass into `DailyRecovery`.
 - **Derived insight** — pure engines (`TrainingEngines.swift`): a 0–100
@@ -105,10 +106,10 @@ XCTests.
 ### P1 — Logging experience
 4. **In-workout session** with rest timer and running volume. Persist a
    `WorkoutInProgress` so backgrounding/crash doesn't lose data. *(The
-   "previous set" reference was split out of this item — see 4a, which ships
-   independently of the timer and persistence work.)*
-   - **4a. Previous-set reference in the logger** — top of the P1 logging
-     queue. Scoped in §4.2.
+   "previous set" reference and editable prefill were split out of this item;
+   see 4a, shipped independently of the timer and persistence work.)*
+   - **4a. Previous-set reference + editable prefill in the logger** — shipped
+     2026-08-15; scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
    Unlocks autoregulation and cleaner volume math (exclude warmups).
 6. **Plate calculator** and **unit preference** (kg/lb) app-wide.
@@ -462,14 +463,28 @@ editing a set's weight changing `Workout.volume` and the recomputed estimated
 1RM, editing down a typo'd 500 kg set removing the bogus PR, and
 `calories`/`notes`/`durationMinutes` surviving an edit.
 
-### 4.2 Previous-set reference in the logger — **P1 (top of the logging queue)**
+### 4.2 Previous-set reference in the logger — **P1** — *shipped 2026-08-15*
 
-**Already in the spec, but gated.** This is the "previous set" clause of P1 item
-4 (§2) and the "Previous-set reference" / "'Last time' reference in the logger"
-entries in the UI review (§3.1). It is **not implemented** — nothing in
-`PersonalStrengthCoach/` reads prior sets into the logger. Splitting it out as
-**4a** because it needs neither the rest timer nor `WorkoutInProgress`
-persistence, which are what make item 4 large.
+This is the "previous set" clause of P1 item 4 and the "Previous-set reference" /
+"'Last time' reference in the logger" entries in the UI review (§3.1). It ships
+independently of the rest timer and `WorkoutInProgress` persistence, which remain
+part of the larger deferred item 4.
+
+**Implemented**
+- `ExerciseLoggerCard` shows the most recent prior performance under the exercise
+  header, including relative age, with references older than eight weeks dimmed.
+- Lookup excludes the workout being edited, matches normalized exercise names, and
+  orders sets by `setNumber` with deterministic tie-breakers.
+- Each current set row shows a dim reference to the corresponding prior set when
+  one exists; first-time exercises show no placeholder.
+- Routine-prefilled targets remain unchanged; manually added exercises initialize
+  editable draft sets from the corresponding sets in the most recent performance.
+- Added focused `PreviousSetTests` coverage for recency, aliases, edit exclusion,
+  first-time exercises, ordering, equal-date determinism, and draft prefill.
+
+**Deferred**
+- Rest timer, running volume, and `WorkoutInProgress` persistence remain part of
+  the original item 4.
 
 **Scope**
 - In `ExerciseLoggerCard` (`WorkoutLoggerView.swift:140`), show the most recent
@@ -486,11 +501,10 @@ persistence, which are what make item 4 large.
   no row at all; never render a `0 × 0` placeholder.
 - **Staleness:** show relative age; consider de-emphasizing references older
   than ~8 weeks rather than hiding them.
-- **Prefill is a separate decision.** Displaying last time's numbers is
-  unambiguously useful; *defaulting* the new set to them is a product choice that
-  interacts with the existing `weight: 0, reps: 8` default the UI review flagged
-  (§3.1). Ship display first; evaluate prefill (and a tap-to-fill affordance)
-  after using it.
+- **Prefill:** when an exercise is manually added, initialize its editable sets
+  from the corresponding sets in the most recent prior performance. The values
+  remain editable; routine targets remain authoritative, and editing an existing
+  workout preserves its stored draft values.
 - **Routine interaction:** when starting from a routine, the routine's target
   sets/reps/weight already prefill the draft — show the previous-set reference
   *alongside* the target, not instead of it, so target vs. actual stay distinct.
@@ -510,8 +524,9 @@ returns nil for a first-time exercise; orders sets by `setNumber`.
 1. ~~**4.1 delete**~~ / ~~**4.1 edit**~~ — shipped together on 2026-08-13 rather
    than as two slices: they share the confirmation and navigation plumbing, and
    delete alone still leaves "lose the whole session to fix one set".
-2. **4.2 previous-set display** — independent of 4.1; only touches
-   `ExerciseLoggerCard` and a lookup helper. Next in this section.
+2. **4.2 previous-set reference + editable prefill** — shipped independently of
+   4.1; it shows the prior performance and initializes manually added exercises
+   from it without overriding routine targets or edit drafts.
 
-Deferred to the original item 4: rest timer, running volume, `WorkoutInProgress`
-persistence, prefill-from-last-time.
+Deferred to the original item 4: rest timer, running volume, and
+`WorkoutInProgress` persistence.

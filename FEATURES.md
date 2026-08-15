@@ -130,14 +130,16 @@ Log training sessions with exercise-by-exercise tracking.
 1. From History tab, tap **+** → **Log workout**.
 2. Set workout name and date/time.
 3. Tap **Add exercise** to choose from the library or create a custom exercise.
-4. For each exercise, log sets with weight (kg) and reps.
+4. For each exercise, log sets with weight (kg) and reps. When the exercise has
+   prior history, the corresponding sets are prefilled from the most recent
+   workout and remain fully editable.
 5. Tap **Save** when complete.
 
 **Features:**
 - **Custom exercises** — Add any movement not in the built-in library. Assign it a primary muscle group for accurate recovery tracking.
 - **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, and reps.
 - **Duration tracking** — Workout duration is automatically calculated from session start to save time.
-- **Start from Routine** — Load a saved routine to pre-fill exercises and target sets/reps (see below).
+- **Start from Routine** — Load a saved routine to pre-fill exercises and target sets/reps (see below). Routine targets take precedence over previous-workout prefill.
 
 **Tips:**
 - For bodyweight exercises (push-ups, pull-ups), log 0 kg weight.
