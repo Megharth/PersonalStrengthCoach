@@ -2,6 +2,39 @@ import XCTest
 @testable import PersonalStrengthCoach
 
 final class TrainingEngineTests: XCTestCase {
+    func testRPEValidationAndRIRConversion() {
+        XCTAssertNil(RPEEngine.validated(nil))
+        XCTAssertNil(RPEEngine.validated(-0.5))
+        XCTAssertNil(RPEEngine.validated(10.5))
+        XCTAssertNil(RPEEngine.validated(.infinity))
+        XCTAssertEqual(RPEEngine.validated(7.24), 7.0)
+        XCTAssertEqual(RPEEngine.validated(7.26), 7.5)
+        XCTAssertEqual(RPEEngine.rir(from: 8.5), 1.5)
+        XCTAssertEqual(RPEEngine.rpe(fromRIR: 1.5), 8.5)
+        XCTAssertNil(RPEEngine.rpe(fromRIR: -1))
+    }
+
+    func testWarmupsAreExcludedFromVolumeAndEstimatedOneRMButOtherSetTypesCount() {
+        let warmup = ExerciseSet(exercise: "Bench Press", weight: 200, reps: 10, setNumber: 1, primaryMuscle: .chest, setType: .warmup)
+        let drop = ExerciseSet(exercise: "Bench Press", weight: 80, reps: 5, setNumber: 2, primaryMuscle: .chest, setType: .dropSet)
+        let failure = ExerciseSet(exercise: "Bench Press", weight: 90, reps: 5, setNumber: 3, primaryMuscle: .chest, setType: .failure)
+        let workout = Workout(title: "Session", durationMinutes: 0, sets: [warmup, drop, failure])
+
+        XCTAssertEqual(workout.volume, 850, accuracy: 0.001)
+        XCTAssertEqual(PerformanceEngine.estimated1RM(for: "Bench Press", sets: workout.sets), failure.estimated1RM, accuracy: 0.001)
+    }
+
+    func testWarmupsAreExcludedFromPRCandidatesAndHistoricalBest() {
+        let old = Workout(date: Date(timeIntervalSince1970: 100), title: "Old", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 100, reps: 5, setNumber: 1, primaryMuscle: .quads, setType: .warmup)
+        ])
+        let current = Workout(date: Date(timeIntervalSince1970: 200), title: "Current", durationMinutes: 0, sets: [
+            ExerciseSet(exercise: "Squat", weight: 80, reps: 5, setNumber: 1, primaryMuscle: .quads)
+        ])
+
+        XCTAssertTrue(PerformanceEngine.personalRecords(in: current, history: [old]).contains("Squat estimated 1RM"))
+    }
+
     func testReadinessWithoutHealthDataUsesNeutralFallback() {
         let result = RecoveryEngine.readiness(today: nil, recent: [], workouts: [])
 

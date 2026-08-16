@@ -10,6 +10,25 @@ final class StrongImportParserTests: XCTestCase {
         XCTAssertEqual(result.workouts[0].sets[0].reps, 10)
     }
 
+    func testJSONParsesSetTypeAndRPEMetadata() throws {
+        let json = #"{"workouts":[{"name":"Push","date":"2025-01-01","exercises":[{"name":"Bench Press","sets":[{"weight":50,"reps":5,"settype":"warmup","rpe":7.5},{"weight":80,"reps":5,"settype":"drop","rpe":11}]}]}]}"#
+
+        let result = try StrongImportParser.parse(json)
+
+        XCTAssertEqual(result.workouts[0].sets.map(\.setType), [.warmup, .dropSet])
+        XCTAssertEqual(result.workouts[0].sets[0].rpe, 7.5)
+        XCTAssertNil(result.workouts[0].sets[1].rpe)
+    }
+
+    func testCSVParsesWarmupMarkerAndDefaultsMissingMetadata() throws {
+        let csv = "Date,Exercise,Weight,Reps,Set Order\n2025-01-01,Bench Press,20 kg,5,W1\n2025-01-01,Bench Press,80 kg,5,2"
+
+        let result = try StrongImportParser.parse(csv)
+
+        XCTAssertEqual(result.workouts[0].sets.map(\.setType), [.warmup, .working])
+        XCTAssertNil(result.workouts[0].sets[0].rpe)
+    }
+
     func testCSVConvertsPoundsToKilograms() throws {
         let result = try StrongImportParser.parse("Date,Exercise,Weight,Reps\n2025-01-01,Bench Press,10 lb,5")
 
@@ -141,7 +160,7 @@ final class StrongImportParserTests: XCTestCase {
         let date = Date(timeIntervalSince1970: 1_735_689_600)
         let storedSet = ExerciseSet(exercise: "Bench Press", weight: 0, reps: 10, setNumber: 1, primaryMuscle: .chest)
         let stored = Workout(date: date, title: "Bodyweight", durationMinutes: 0, sets: [storedSet])
-        let importedSet = ImportedSet(exercise: "bench press", weight: 0, reps: 10)
+        let importedSet = ImportedSet(exercise: "bench press", weight: 0, reps: 10, setType: .working, rpe: nil)
         let imported = ImportedWorkout(title: "bodyweight", date: date.addingTimeInterval(30), sets: [importedSet])
 
         XCTAssertTrue(StrongImportView.isDuplicate(stored, imported))

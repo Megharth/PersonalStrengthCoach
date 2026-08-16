@@ -115,7 +115,7 @@ XCTests.
    - **4a. Previous-set reference + editable prefill in the logger** — shipped
      2026-08-15; scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
-   Unlocks autoregulation and cleaner volume math (exclude warmups).
+   **Shipped 2026-08-16** — optional canonical RPE (0–10, half-point increments), derived RIR, set-type controls, warmup exclusion from volume/e1RM/PR analytics, draft/edit/import/export support, and V4→V5 migration compatibility. Unlocks autoregulation and cleaner volume math (exclude warmups).
 6. **Plate calculator** and **unit preference** (kg/lb) app-wide.
 
 ### P1 — Analytics

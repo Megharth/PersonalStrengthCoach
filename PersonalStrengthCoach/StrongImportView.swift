@@ -8,6 +8,8 @@ struct ImportedSet: Identifiable {
     let exercise: String
     let weight: Double
     let reps: Int
+    let setType: SetType
+    let rpe: Double?
 }
 
 struct ImportedWorkout: Identifiable {
@@ -118,7 +120,7 @@ struct StrongImportView: View {
                 context.insert(workout)
                 for (index, importedSet) in imported.sets.enumerated() {
                     let muscle = ExerciseCatalog.muscles(for: importedSet.exercise).first ?? .core
-                    let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: index + 1, primaryMuscle: muscle)
+                    let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: index + 1, primaryMuscle: muscle, setType: importedSet.setType, rpe: importedSet.rpe)
                     set.workout = workout
                     context.insert(set)
                 }
@@ -211,10 +213,12 @@ enum StrongImportParser {
             let exercises = workout.array(for: ["exercises", "workoutexercises", "exerciseitems"])
             let sets = exercises.flatMap { exercise -> [ImportedSet] in
                 let name = exercise.string(for: ["name", "exercisename", "title"]) ?? "Exercise"
-                return exercise.array(for: ["sets", "exercisesets", "setdata"]).compactMap { item in
+                return exercise.array(for: ["sets", "exercisesets", "setdata"]).compactMap { item -> ImportedSet? in
                     guard let reps = item.int(for: ["reps", "repetitions"]) else { failedRows += 1; return nil }
                     guard let weight = item.weightKg() else { failedRows += 1; return nil }
-                    guard let set = makeSet(exercise: name, weight: weight, reps: reps) else { failedRows += 1; return nil }
+                    let setType = parseSetType(item.string(for: ["setorder", "settype", "type"]))
+                    let rpe = RPEEngine.validated(item.double(for: ["rpe", "rateofperceivedexertion"]))
+                    guard let set = makeSet(exercise: name, weight: weight, reps: reps, setType: setType, rpe: rpe) else { failedRows += 1; return nil }
                     return set
                 }
             }
@@ -239,7 +243,7 @@ enum StrongImportParser {
             guard let date = parseDate(value(row, ["date", "timestamp", "startdate"])) else { failedRows += 1; continue }
             guard let weightColumn = keys.firstIndex(where: { ["weight", "weightkg", "weightlb", "weightlbs", "load"].contains($0) }), weightColumn < row.count else { failedRows += 1; continue }
             guard let weight = weightKg(row[weightColumn], header: keys[weightColumn]) else { failedRows += 1; continue }
-            guard let importedSet = makeSet(exercise: exercise, weight: weight, reps: reps) else { failedRows += 1; continue }
+            guard let importedSet = makeSet(exercise: exercise, weight: weight, reps: reps, setType: parseSetType(value(row, ["setorder", "settype", "type"])), rpe: RPEEngine.validated(Double(value(row, ["rpe", "rateofperceivedexertion"]) ?? ""))) else { failedRows += 1; continue }
             let durationMinutes = parseDurationMinutes(value(row, ["duration", "workoutduration"]))
             let key = "\(title)-\(Int(date.timeIntervalSince1970))"
             grouped[key, default: (title, date, durationMinutes, [])].sets.append(importedSet)
@@ -295,10 +299,18 @@ enum StrongImportParser {
         return sets.isEmpty ? nil : StrongImportResult(workouts: [ImportedWorkout(title: title, date: date, sets: sets)], skippedRows: 0, failedRows: failedRows)
     }
 
-    private static func makeSet(exercise: String, weight: Double, reps: Int) -> ImportedSet? {
+    private static func makeSet(exercise: String, weight: Double, reps: Int, setType: SetType = .working, rpe: Double? = nil) -> ImportedSet? {
         let name = exercise.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, weight.isFinite, weight >= 0, reps > 0 else { return nil }
-        return ImportedSet(exercise: name, weight: weight, reps: reps)
+        return ImportedSet(exercise: name, weight: weight, reps: reps, setType: setType, rpe: RPEEngine.validated(rpe))
+    }
+
+    private static func parseSetType(_ value: String?) -> SetType {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !value.isEmpty else { return .working }
+        if value.hasPrefix("w") || value.contains("warm") { return .warmup }
+        if value.contains("drop") { return .dropSet }
+        if value.contains("fail") { return .failure }
+        return .working
     }
 
     private static func weightKg(_ value: String, header: String) -> Double? {

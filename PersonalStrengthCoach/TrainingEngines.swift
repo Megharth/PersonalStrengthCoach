@@ -2,6 +2,22 @@ import Foundation
 
 enum ReadinessConfidence { case low, medium, high }
 
+enum RPEEngine {
+    static func validated(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value >= 0, value <= 10 else { return nil }
+        return (value * 2).rounded() / 2
+    }
+
+    static func rir(from rpe: Double?) -> Double? {
+        validated(rpe).map { max(0, 10 - $0) }
+    }
+
+    static func rpe(fromRIR rir: Double?) -> Double? {
+        guard let rir, rir.isFinite, rir >= 0, rir <= 10 else { return nil }
+        return validated(10 - rir)
+    }
+}
+
 struct ReadinessResult {
     let score: Int
     let color: String
@@ -52,7 +68,7 @@ enum PerformanceEngine {
         return workouts.filter { $0.date >= start }.reduce(0) { $0 + $1.volume }
     }
     static func estimated1RM(for exercise: String, sets: [ExerciseSet]) -> Double {
-        sets.filter { $0.normalizedExercise == ExerciseCatalog.normalize(exercise) }.map(\.estimated1RM).max() ?? 0
+        sets.filter { $0.normalizedExercise == ExerciseCatalog.normalize(exercise) && $0.setType != .warmup }.map(\.estimated1RM).max() ?? 0
     }
 
     /// Best estimated 1RM for each recorded workout containing the exercise,
@@ -60,7 +76,7 @@ enum PerformanceEngine {
     static func estimated1RMHistory(for exercise: String, sets: [ExerciseSet]) -> [Double] {
         let normalized = ExerciseCatalog.normalize(exercise)
         let relevant = sets.filter {
-            $0.normalizedExercise == normalized && $0.estimated1RM.isFinite && $0.estimated1RM > 0
+            $0.normalizedExercise == normalized && $0.setType != .warmup && $0.estimated1RM.isFinite && $0.estimated1RM > 0
         }
         let linkedSets = relevant.compactMap { set -> (workout: Workout, set: ExerciseSet)? in
             guard let workout = set.workout else { return nil }
@@ -79,7 +95,8 @@ enum PerformanceEngine {
         let past = history.filter { $0.date < workout.date }
         var records: [String] = []
         for set in workout.sets {
-            let previous = past.flatMap(\.sets).filter { $0.normalizedExercise == set.normalizedExercise }
+            guard set.setType != .warmup else { continue }
+            let previous = past.flatMap(\.sets).filter { $0.normalizedExercise == set.normalizedExercise && $0.setType != .warmup }
             let previousBest = previous.map(\.estimated1RM).max()
             if isAllowedPR(new: set.estimated1RM, previousBest: previousBest) { records.append("\(set.normalizedExercise) estimated 1RM") }
         }
@@ -105,7 +122,7 @@ enum PerformanceEngine {
     static func weeklyEstimated1RM(for exercise: String, workouts: [Workout], weeks: Int = 7, now: Date = .now) -> [Double] {
         let normalized = ExerciseCatalog.normalize(exercise)
         let sets = workouts.flatMap { workout in workout.sets.map { (date: workout.date, set: $0) } }
-            .filter { $0.set.normalizedExercise == normalized && $0.set.estimated1RM.isFinite && $0.set.estimated1RM > 0 }
+            .filter { $0.set.normalizedExercise == normalized && $0.set.setType != .warmup && $0.set.estimated1RM.isFinite && $0.set.estimated1RM > 0 }
         guard weeks > 0 else { return [] }
         var results: [Double] = []
         for i in 1...weeks {
@@ -124,7 +141,7 @@ enum PerformanceEngine {
         guard weeks > 0,
               let start = Calendar.current.date(byAdding: .day, value: -weeks * 7, to: now) else { return nil }
         let recentSets = workouts.filter { $0.date >= start && $0.date < now }.flatMap(\.sets)
-            .filter { $0.estimated1RM.isFinite && $0.estimated1RM > 0 }
+            .filter { $0.setType != .warmup && $0.estimated1RM.isFinite && $0.estimated1RM > 0 }
         let candidates = Dictionary(grouping: recentSets, by: \.normalizedExercise)
         return candidates.compactMap { exercise, sets -> (exercise: String, points: [Double], setCount: Int)? in
             let points = weeklyEstimated1RM(for: exercise, workouts: workouts, weeks: weeks, now: now)
@@ -244,7 +261,7 @@ enum WorkoutInProgressEngine {
     static func volume(of exercises: [LoggedExercise]) -> Double {
         exercises.reduce(0) { total, exercise in
             total + exercise.sets.reduce(0) { total, set in
-                guard set.isCompleted else { return total }
+                guard set.isCompleted, set.setType != .warmup else { return total }
                 return total + set.weight * Double(set.reps)
             }
         }
@@ -278,8 +295,10 @@ struct PersistedDraftSet {
     let reps: Int
     let setNumber: Int
     let isCompleted: Bool
+    let setType: SetType
+    let rpe: Double?
 
-    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false) {
+    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false, setType: SetType = .working, rpe: Double? = nil) {
         self.exercise = exercise
         self.primaryMuscle = primaryMuscle
         self.exerciseOrder = exerciseOrder
@@ -287,6 +306,8 @@ struct PersistedDraftSet {
         self.reps = reps
         self.setNumber = setNumber
         self.isCompleted = isCompleted
+        self.setType = setType
+        self.rpe = RPEEngine.validated(rpe)
     }
 }
 
@@ -301,7 +322,9 @@ extension WorkoutInProgressEngine {
                     weight: set.weight,
                     reps: set.reps,
                     setNumber: setIndex + 1,
-                    isCompleted: set.isCompleted
+                    isCompleted: set.isCompleted,
+                    setType: set.setType,
+                    rpe: set.rpe
                 )
             }
         }
@@ -317,7 +340,7 @@ extension WorkoutInProgressEngine {
                     name: first.exercise,
                     primaryMuscle: first.primaryMuscle,
                     sets: ordered.map {
-                        EditableSet(weight: $0.weight, reps: $0.reps, isCompleted: $0.isCompleted)
+                        EditableSet(weight: $0.weight, reps: $0.reps, isCompleted: $0.isCompleted, setType: $0.setType, rpe: $0.rpe)
                     }
                 )
             }

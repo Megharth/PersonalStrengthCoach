@@ -132,14 +132,15 @@ Log training sessions with exercise-by-exercise tracking.
 1. From History tab, tap **+** → **Log workout**.
 2. Set workout name and date/time.
 3. Tap **Add exercise** to choose from the library or create a custom exercise.
-4. For each exercise, log sets with weight (kg) and reps. When the exercise has
-   prior history, the corresponding sets are prefilled from the most recent
-   workout and remain fully editable.
+4. For each exercise, log sets with weight (kg), reps, set type, and optional RPE.
+   Set types distinguish warmups, working sets, drop sets, and failure sets. When
+   the exercise has prior history, the corresponding sets are prefilled from the
+   most recent workout and remain fully editable; prior RPE is never copied.
 5. Tap **Save** when complete.
 
 **Features:**
 - **Custom exercises** — Add any movement not in the built-in library. Assign it a primary muscle group for accurate recovery tracking.
-- **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, and reps.
+- **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, reps, and set type. Optional RPE is stored in half-point increments from 0 to 10; RIR is derived from RPE. Warmup sets remain visible but are excluded from volume and strength analytics, while working, drop, and failure sets count normally.
 - **Duration tracking** — Workout duration is automatically calculated from session start to save time.
 - **Resumable sessions** — The in-progress workout is persisted on-device, including exercise/set values, completion state, elapsed time, and an absolute rest-timer deadline. The Session section shows completed-set volume and elapsed time while logging. Backgrounding and view recreation restore the draft; History provides an explicit Resume action after relaunch.
 - **Rest timer** — Completing a set starts a 90-second in-sheet countdown; it survives backgrounding and view recreation and never displays negative time. The timer is a local in-sheet indicator; ActivityKit/Live Activities are not part of this feature.
@@ -187,8 +188,8 @@ If you follow a program (e.g., PPL, 5/3/1, Upper/Lower split), save each session
 Migrate your training history from the Strong app.
 
 **Supported formats:**
-- **CSV export** — Strong's "Export to CSV" feature. Supports workouts, exercises, sets, weight (kg/lb auto-converted), reps, and duration.
-- **JSON export** — Strong's JSON export format.
+- **CSV export** — Strong's "Export to CSV" feature. Supports workouts, exercises, sets, weight (kg/lb auto-converted), reps, duration, and warmup markers from Set Order.
+- **JSON export** — Strong's JSON export format, including optional set type and RPE metadata when present.
 - **Shared workout text** — Copy/paste text from Strong's "Share Workout" feature (includes exercise names and set-by-set breakdowns).
 
 **To import:**
@@ -237,7 +238,7 @@ Combines:
 Confidence is marked "low" if you have fewer than 3 days of recovery data. Sync Apple Health daily to build a reliable baseline.
 
 ### Estimated 1RM
-Uses the Brzycki formula: `weight / (1.0278 - 0.0278 × reps)`. Calculated per exercise from your heaviest recent set. Progression charts track 1RM over time to visualize strength gains.
+Uses the Epley formula: `weight × (1 + reps / 30)`. Warmup sets are excluded; the estimate is calculated per exercise from the best eligible recent set. Progression charts track 1RM over time to visualize strength gains.
 
 ### Personal Records (PRs)
 Detected automatically when you:

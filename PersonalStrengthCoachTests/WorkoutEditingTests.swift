@@ -126,7 +126,7 @@ final class WorkoutEditorLogicTests: XCTestCase {
 final class WorkoutEditingPersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV3.models),
+            for: Schema(AppSchemaV5.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )

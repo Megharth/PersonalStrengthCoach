@@ -3,9 +3,10 @@ import XCTest
 @testable import PersonalStrengthCoach
 
 final class WorkoutInProgressTests: XCTestCase {
-    func testVolumeCountsCompletedSetsOnly() {
+    func testVolumeCountsCompletedSetsOnlyAndExcludesWarmups() {
         let exercise = LoggedExercise(name: "Bench Press", primaryMuscle: .chest, sets: [
-            EditableSet(weight: 100, reps: 5, isCompleted: true),
+            EditableSet(weight: 200, reps: 5, isCompleted: true, setType: .warmup),
+            EditableSet(weight: 100, reps: 5, isCompleted: true, setType: .dropSet),
             EditableSet(weight: 100, reps: 5)
         ])
 
@@ -71,7 +72,7 @@ final class WorkoutInProgressTests: XCTestCase {
 final class WorkoutInProgressPersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV4.models),
+            for: Schema(AppSchemaV5.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
@@ -97,7 +98,9 @@ final class WorkoutInProgressPersistenceTests: XCTestCase {
             weight: 80,
             reps: 8,
             setNumber: 1,
-            isCompleted: true
+            isCompleted: true,
+            setType: .warmup,
+            rpe: 8.5
         )
         let unfinished = WorkoutInProgressSet(
             exercise: "Bench Press",
@@ -121,6 +124,8 @@ final class WorkoutInProgressPersistenceTests: XCTestCase {
         let sets = reloaded.sets.sorted { $0.setNumber < $1.setNumber }
         XCTAssertEqual(sets.map(\.weight), [80, 80])
         XCTAssertEqual(sets.map(\.isCompleted), [true, false])
+        XCTAssertEqual(sets[0].setType, .warmup)
+        XCTAssertEqual(sets[0].rpe, 8.5)
     }
 
     func testDeletingDraftCascadesToItsSets() throws {
@@ -165,8 +170,8 @@ final class WorkoutInProgressPersistenceTests: XCTestCase {
     }
 
     func testCurrentSchemaContainsDraftModelsAndBuildsContainer() throws {
-        XCTAssertTrue(AppSchemaV4.models.contains { $0 == WorkoutInProgress.self })
-        XCTAssertTrue(AppSchemaV4.models.contains { $0 == WorkoutInProgressSet.self })
+        XCTAssertTrue(AppSchemaV5.models.contains { $0 == WorkoutInProgress.self })
+        XCTAssertTrue(AppSchemaV5.models.contains { $0 == WorkoutInProgressSet.self })
         _ = try makeInMemoryContainer()
     }
 }

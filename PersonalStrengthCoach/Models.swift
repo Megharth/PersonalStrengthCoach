@@ -8,6 +8,16 @@ enum MuscleGroup: String, CaseIterable, Codable, Identifiable {
     var id: String { rawValue }
 }
 
+enum SetType: String, CaseIterable, Codable, Identifiable {
+    case warmup = "Warmup"
+    case working = "Working"
+    case dropSet = "Drop Set"
+    case failure = "Failure"
+
+    var id: String { rawValue }
+}
+
+
 @Model
 final class Workout {
     var date: Date
@@ -21,7 +31,12 @@ final class Workout {
         self.date = date; self.title = title; self.durationMinutes = durationMinutes
         self.calories = calories; self.notes = notes; self.sets = sets
     }
-    var volume: Double { sets.reduce(0) { $0 + $1.weight * Double($1.reps) } }
+    var volume: Double {
+        sets.reduce(0) { total, set in
+            guard set.setType != .warmup else { return total }
+            return total + set.weight * Double(set.reps)
+        }
+    }
 }
 
 @Model
@@ -32,13 +47,17 @@ final class ExerciseSet {
     var reps: Int
     var setNumber: Int
     var primaryMuscleRaw: String
+    var setTypeRaw: String = SetType.working.rawValue
+    var rpe: Double?
     var workout: Workout?
 
-    init(exercise: String, normalizedExercise: String? = nil, weight: Double, reps: Int, setNumber: Int, primaryMuscle: MuscleGroup) {
+    init(exercise: String, normalizedExercise: String? = nil, weight: Double, reps: Int, setNumber: Int, primaryMuscle: MuscleGroup, setType: SetType = .working, rpe: Double? = nil) {
         self.exercise = exercise; self.normalizedExercise = normalizedExercise ?? ExerciseCatalog.normalize(exercise)
         self.weight = weight; self.reps = reps; self.setNumber = setNumber; self.primaryMuscleRaw = primaryMuscle.rawValue
+        self.setTypeRaw = setType.rawValue; self.rpe = rpe
     }
     var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }
+    var setType: SetType { SetType(rawValue: setTypeRaw) ?? .working }
     var estimated1RM: Double { weight * (1 + Double(reps) / 30) }
 }
 
@@ -153,9 +172,11 @@ final class WorkoutInProgressSet {
     var reps: Int
     var setNumber: Int
     var isCompleted: Bool
+    var setTypeRaw: String = SetType.working.rawValue
+    var rpe: Double?
     var session: WorkoutInProgress?
 
-    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false) {
+    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false, setType: SetType = .working, rpe: Double? = nil) {
         self.exercise = exercise
         self.primaryMuscleRaw = primaryMuscle.rawValue
         self.exerciseOrder = exerciseOrder
@@ -163,9 +184,12 @@ final class WorkoutInProgressSet {
         self.reps = reps
         self.setNumber = setNumber
         self.isCompleted = isCompleted
+        self.setTypeRaw = setType.rawValue
+        self.rpe = rpe
     }
 
     var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }
+    var setType: SetType { SetType(rawValue: setTypeRaw) ?? .working }
 }
 
 enum ExerciseCatalog {

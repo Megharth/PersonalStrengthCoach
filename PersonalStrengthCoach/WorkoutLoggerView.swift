@@ -9,28 +9,34 @@ struct EditableSet: Identifiable, Hashable {
     var weight: Double
     var reps: Int
     var isCompleted: Bool
+    var setType: SetType
+    var rpe: Double?
 
-    init(existingModel: ExerciseSet? = nil, weight: Double = 0, reps: Int = 8, isCompleted: Bool = false) {
+    init(existingModel: ExerciseSet? = nil, weight: Double = 0, reps: Int = 8, isCompleted: Bool = false, setType: SetType = .working, rpe: Double? = nil) {
         self.existingModel = existingModel
         self.weight = weight
         self.reps = reps
         self.isCompleted = isCompleted
+        self.setType = setType
+        self.rpe = RPEEngine.validated(rpe)
     }
 
     init(model: ExerciseSet) {
-        self.init(existingModel: model, weight: model.weight, reps: model.reps, isCompleted: true)
+        self.init(existingModel: model, weight: model.weight, reps: model.reps, isCompleted: true, setType: model.setType, rpe: model.rpe)
     }
 
     // Identity is the draft's own UUID: SwiftUI diffs by `id`, and reaching into a
     // `PersistentModel`'s hash would be pointless work and a hazard once it's deleted.
     static func == (lhs: EditableSet, rhs: EditableSet) -> Bool {
-        lhs.id == rhs.id && lhs.weight == rhs.weight && lhs.reps == rhs.reps && lhs.isCompleted == rhs.isCompleted
+        lhs.id == rhs.id && lhs.weight == rhs.weight && lhs.reps == rhs.reps && lhs.isCompleted == rhs.isCompleted && lhs.setType == rhs.setType && lhs.rpe == rhs.rpe
     }
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
         hasher.combine(weight)
         hasher.combine(reps)
         hasher.combine(isCompleted)
+        hasher.combine(setType)
+        hasher.combine(rpe)
     }
 }
 
@@ -46,7 +52,7 @@ extension LoggedExercise {
         from exercise: LibraryExercise,
         previous: PreviousSetPerformance? = nil
     ) -> LoggedExercise {
-        let sets = previous?.sets.map { EditableSet(weight: $0.weight, reps: $0.reps) }
+        let sets = previous?.sets.map { EditableSet(weight: $0.weight, reps: $0.reps, setType: $0.setType) }
             ?? [EditableSet(), EditableSet(), EditableSet()]
         return LoggedExercise(name: exercise.name, primaryMuscle: exercise.primaryMuscle, sets: sets)
     }
@@ -294,7 +300,9 @@ struct WorkoutLoggerView: View {
                 weight: $0.weight,
                 reps: $0.reps,
                 setNumber: $0.setNumber,
-                isCompleted: $0.isCompleted
+                isCompleted: $0.isCompleted,
+                setType: $0.setType,
+                rpe: $0.rpe
             )
         }
         exercises = WorkoutInProgressEngine.draftExercises(from: persistedSets)
@@ -330,7 +338,9 @@ struct WorkoutLoggerView: View {
                 weight: draft.weight,
                 reps: draft.reps,
                 setNumber: draft.setNumber,
-                isCompleted: draft.isCompleted
+                isCompleted: draft.isCompleted,
+                setType: draft.setType,
+                rpe: draft.rpe
             )
             set.session = session
             context.insert(set)
@@ -400,6 +410,8 @@ struct WorkoutLoggerView: View {
                 set.weight = loggedSet.weight
                 set.reps = loggedSet.reps
                 set.setNumber = index + 1
+                set.setTypeRaw = loggedSet.setType.rawValue
+                set.rpe = RPEEngine.validated(loggedSet.rpe)
                 set.workout = targetWorkout
                 if loggedSet.existingModel == nil { context.insert(set) }
                 finalSets.append(set)
@@ -452,6 +464,18 @@ private struct ExerciseLoggerCard: View {
                         .font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 18)
                     NumericFieldDouble(value: $set.weight, title: "kg")
                     NumericFieldInt(value: $set.reps, title: "reps")
+                    Picker("Set type", selection: $set.setType) {
+                        ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .accessibilityLabel("Set type")
+                    TextField("RPE", value: $set.rpe, format: .number.precision(.fractionLength(1)))
+                        .keyboardType(.decimalPad)
+                        .frame(width: 48)
+                        .multilineTextAlignment(.center)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Optional RPE")
                     if let previousSet = previous?.sets[safe: index] {
                         Text("\(Self.formatWeight(previousSet.weight)) × \(previousSet.reps)")
                             .font(.caption2)

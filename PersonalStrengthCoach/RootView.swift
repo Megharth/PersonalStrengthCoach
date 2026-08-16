@@ -303,7 +303,18 @@ private struct ExerciseRow: View {
     let name: String
     let sets: [ExerciseSet]
     let allSets: [ExerciseSet]
-    private var volume: Double { sets.reduce(0) { total, set in total + set.weight * Double(set.reps) } }
+    private var volume: Double { sets.reduce(0) { total, set in
+        guard set.setType != .warmup else { return total }
+        return total + set.weight * Double(set.reps)
+    } }
+
+    private var metadataSummary: String {
+        sets.map { set in
+            var details = set.setType.rawValue
+            if let rpe = set.rpe { details += " · RPE \(String(format: "%.1f", rpe))" }
+            return details
+        }.joined(separator: " · ")
+    }
     var body: some View {
         NavigationLink {
             ExerciseDetailView(exercise: name, sets: allSets)
@@ -313,6 +324,10 @@ private struct ExerciseRow: View {
                 Text("\(sets.count) sets · \(Int(volume).formatted()) kg")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Text(metadataSummary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
         }
     }

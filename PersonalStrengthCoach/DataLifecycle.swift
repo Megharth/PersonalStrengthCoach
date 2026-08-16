@@ -18,6 +18,8 @@ struct SetExport: Codable {
     let reps: Int
     let setNumber: Int
     let primaryMuscle: String
+    let setType: String
+    let rpe: Double?
 }
 
 struct RecoveryExport: Codable {
@@ -246,15 +248,100 @@ enum AppSchemaV4: VersionedSchema {
     static var models: [any PersistentModel.Type] {
         [Workout.self, ExerciseSet.self, DailyRecovery.self, CustomExercise.self, Routine.self, RoutineExercise.self, WorkoutInProgress.self, WorkoutInProgressSet.self]
     }
+
+    @Model final class Workout {
+        var date: Date
+        var title: String
+        var durationMinutes: Int
+        var calories: Int
+        var notes: String
+        @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.workout) var sets: [ExerciseSet]
+        init(date: Date = .now, title: String, durationMinutes: Int, calories: Int = 0, notes: String = "", sets: [ExerciseSet] = []) {
+            self.date = date; self.title = title; self.durationMinutes = durationMinutes
+            self.calories = calories; self.notes = notes; self.sets = sets
+        }
+    }
+
+    @Model final class ExerciseSet {
+        var exercise: String
+        var normalizedExercise: String
+        var weight: Double
+        var reps: Int
+        var setNumber: Int
+        var primaryMuscleRaw: String
+        var workout: Workout?
+        init(exercise: String, normalizedExercise: String, weight: Double, reps: Int, setNumber: Int, primaryMuscleRaw: String) {
+            self.exercise = exercise; self.normalizedExercise = normalizedExercise; self.weight = weight
+            self.reps = reps; self.setNumber = setNumber; self.primaryMuscleRaw = primaryMuscleRaw
+        }
+    }
+
+    @Model final class DailyRecovery {
+        var date: Date; var sleepHours: Double; var hrv: Double; var restingHeartRate: Double; var weightKg: Double
+        init(date: Date, sleepHours: Double, hrv: Double, restingHeartRate: Double, weightKg: Double) {
+            self.date = date; self.sleepHours = sleepHours; self.hrv = hrv; self.restingHeartRate = restingHeartRate; self.weightKg = weightKg
+        }
+    }
+
+    @Model final class CustomExercise {
+        var name: String; var primaryMuscleRaw: String; var createdAt: Date
+        init(name: String, primaryMuscleRaw: String, createdAt: Date = .now) {
+            self.name = name; self.primaryMuscleRaw = primaryMuscleRaw; self.createdAt = createdAt
+        }
+    }
+
+    @Model final class Routine {
+        var name: String; var createdAt: Date
+        @Relationship(deleteRule: .cascade, inverse: \RoutineExercise.routine) var exercises: [RoutineExercise]
+        init(name: String, createdAt: Date = .now, exercises: [RoutineExercise] = []) {
+            self.name = name; self.createdAt = createdAt; self.exercises = exercises
+        }
+    }
+
+    @Model final class RoutineExercise {
+        var exercise: String; var normalizedExercise: String; var primaryMuscleRaw: String
+        var order: Int; var targetSets: Int; var targetReps: Int; var targetWeight: Double?; var routine: Routine?
+        init(exercise: String, normalizedExercise: String, primaryMuscleRaw: String, order: Int, targetSets: Int, targetReps: Int, targetWeight: Double? = nil) {
+            self.exercise = exercise; self.normalizedExercise = normalizedExercise; self.primaryMuscleRaw = primaryMuscleRaw
+            self.order = order; self.targetSets = targetSets; self.targetReps = targetReps; self.targetWeight = targetWeight
+        }
+    }
+
+    @Model final class WorkoutInProgress {
+        var title: String; var date: Date; var sessionStart: Date; var lastUpdated: Date
+        var restStartedAt: Date?; var restEndsAt: Date?
+        @Relationship(deleteRule: .cascade, inverse: \WorkoutInProgressSet.session) var sets: [WorkoutInProgressSet]
+        init(title: String = "Workout", date: Date = .now, sessionStart: Date = .now, lastUpdated: Date = .now, sets: [WorkoutInProgressSet] = []) {
+            self.title = title; self.date = date; self.sessionStart = sessionStart; self.lastUpdated = lastUpdated
+            self.restStartedAt = nil; self.restEndsAt = nil; self.sets = sets
+        }
+    }
+
+    @Model final class WorkoutInProgressSet {
+        var exercise: String; var primaryMuscleRaw: String; var exerciseOrder: Int
+        var weight: Double; var reps: Int; var setNumber: Int; var isCompleted: Bool; var session: WorkoutInProgress?
+        init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false) {
+            self.exercise = exercise; self.primaryMuscleRaw = primaryMuscle.rawValue; self.exerciseOrder = exerciseOrder
+            self.weight = weight; self.reps = reps; self.setNumber = setNumber; self.isCompleted = isCompleted
+        }
+    }
+}
+
+enum AppSchemaV5: VersionedSchema {
+    static var versionIdentifier = Schema.Version(5, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [Workout.self, ExerciseSet.self, DailyRecovery.self, CustomExercise.self, Routine.self, RoutineExercise.self, WorkoutInProgress.self, WorkoutInProgressSet.self]
+    }
 }
 
 enum AppMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self, AppSchemaV3.self, AppSchemaV4.self] }
+    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self, AppSchemaV3.self, AppSchemaV4.self, AppSchemaV5.self] }
     static var stages: [MigrationStage] {
         [
             .lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self),
             .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
             .lightweight(fromVersion: AppSchemaV3.self, toVersion: AppSchemaV4.self),
+            .lightweight(fromVersion: AppSchemaV4.self, toVersion: AppSchemaV5.self),
         ]
     }
 }
@@ -300,11 +387,11 @@ struct DataManagementView: View {
 
     private func prepareExport() {
         let payload = PersonalStrengthExport(
-            schemaVersion: 4,
+            schemaVersion: 5,
             exportedAt: .now,
             workouts: workouts.map { workout in
                 WorkoutExport(date: workout.date, title: workout.title, durationMinutes: workout.durationMinutes, calories: workout.calories, notes: workout.notes, sets: workout.sets.map { set in
-                    SetExport(exercise: set.exercise, normalizedExercise: set.normalizedExercise, weight: set.weight, reps: set.reps, setNumber: set.setNumber, primaryMuscle: set.primaryMuscleRaw)
+                    SetExport(exercise: set.exercise, normalizedExercise: set.normalizedExercise, weight: set.weight, reps: set.reps, setNumber: set.setNumber, primaryMuscle: set.primaryMuscleRaw, setType: set.setTypeRaw, rpe: set.rpe)
                 })
             },
             recovery: recovery.map { RecoveryExport(date: $0.date, sleepHours: $0.sleepHours, hrv: $0.hrv, restingHeartRate: $0.restingHeartRate, weightKg: $0.weightKg, sleepSampleCount: $0.sleepSampleCount, hrvSampleCount: $0.hrvSampleCount, restingHeartRateSampleCount: $0.restingHeartRateSampleCount, bodyMassSampleCount: $0.bodyMassSampleCount) },
