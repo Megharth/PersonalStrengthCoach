@@ -8,21 +8,30 @@ struct EditableSet: Identifiable, Hashable {
     let existingModel: ExerciseSet?
     var weight: Double
     var reps: Int
+    var isCompleted: Bool
 
-    init(existingModel: ExerciseSet? = nil, weight: Double = 0, reps: Int = 8) {
+    init(existingModel: ExerciseSet? = nil, weight: Double = 0, reps: Int = 8, isCompleted: Bool = false) {
         self.existingModel = existingModel
         self.weight = weight
         self.reps = reps
+        self.isCompleted = isCompleted
     }
 
     init(model: ExerciseSet) {
-        self.init(existingModel: model, weight: model.weight, reps: model.reps)
+        self.init(existingModel: model, weight: model.weight, reps: model.reps, isCompleted: true)
     }
 
     // Identity is the draft's own UUID: SwiftUI diffs by `id`, and reaching into a
     // `PersistentModel`'s hash would be pointless work and a hazard once it's deleted.
-    static func == (lhs: EditableSet, rhs: EditableSet) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    static func == (lhs: EditableSet, rhs: EditableSet) -> Bool {
+        lhs.id == rhs.id && lhs.weight == rhs.weight && lhs.reps == rhs.reps && lhs.isCompleted == rhs.isCompleted
+    }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(weight)
+        hasher.combine(reps)
+        hasher.combine(isCompleted)
+    }
 }
 
 struct LoggedExercise: Identifiable, Hashable {
@@ -91,7 +100,9 @@ enum WorkoutEditorLogic {
 struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
+    @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     let workout: Workout?          // nil == log a new workout
     @State private var title = "Workout"
     @State private var date = Date.now
@@ -105,6 +116,9 @@ struct WorkoutLoggerView: View {
     @State private var showingRoutineReplacementConfirmation = false
     @State private var showingEmptyAlert = false
     @State private var saveError: String?
+    @State private var restEndsAt: Date?
+    @State private var now = Date.now
+    @State private var showingDiscardConfirmation = false
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     // Explicit init so `WorkoutLoggerView()` still resolves once `workout` is a
@@ -147,6 +161,8 @@ struct WorkoutLoggerView: View {
                         )
                     ) {
                         exercises.removeAll { $0.id == exercise.id }
+                    } startRest: {
+                        startRestTimer()
                     }
                 }
 
@@ -156,14 +172,44 @@ struct WorkoutLoggerView: View {
                             .fontWeight(.semibold)
                     }
                 }
+
+                if !isEditing {
+                    Section("Session") {
+                        LabeledContent("Volume so far", value: "\(Int(WorkoutInProgressEngine.volume(of: exercises)).formatted()) kg")
+                        LabeledContent("Elapsed", value: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
+                        if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
+                            LabeledContent("Rest timer", value: "\(remaining / 60):\(String(format: "%02d", remaining % 60))")
+                        }
+                    }
+                }
             }
             .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: loadDraftIfNeeded)
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { persistDraft() }
+            }
+            .onChange(of: title) { _, _ in persistDraft() }
+            .onChange(of: date) { _, _ in persistDraft() }
+            .onChange(of: exercises) { _, _ in persistDraft() }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    now = .now
+                }
+            }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(isEditing ? "Cancel" : "Discard") {
+                        if isEditing { dismiss() } else { showingDiscardConfirmation = true }
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
             }
+            .confirmationDialog("Discard workout draft?", isPresented: $showingDiscardConfirmation, titleVisibility: .visible) {
+                Button("Discard Draft", role: .destructive) { discardDraft() }
+                Button("Keep Editing", role: .cancel) { }
+            } message: { Text("This removes the unfinished workout and all of its saved sets.") }
             .sheet(isPresented: $showingExercisePicker) {
                 ExercisePicker { exercise in
                     let previous = PreviousSetEngine.mostRecentPerformance(
@@ -210,15 +256,118 @@ struct WorkoutLoggerView: View {
     private func loadDraftIfNeeded() {
         guard !hasLoadedDraft else { return }
         hasLoadedDraft = true
-        guard let workout else { return }
-        title = workout.title
-        date = workout.date
-        durationMinutes = workout.durationMinutes
-        exercises = LoggedExercise.draftExercises(from: workout)
+        if let workout {
+            title = workout.title
+            date = workout.date
+            durationMinutes = workout.durationMinutes
+            exercises = LoggedExercise.draftExercises(from: workout)
+            return
+        }
+
+        let resolved = WorkoutInProgressEngine.resolveActiveSession(among: inProgressSessions)
+        for stray in resolved.strays {
+            context.delete(stray)
+        }
+        if !resolved.strays.isEmpty {
+            do {
+                try context.save()
+            } catch {
+                logger.error("Duplicate workout draft cleanup failed")
+                context.rollback()
+                saveError = "Your unfinished workout could not be restored safely."
+            }
+        }
+
+        guard let session = resolved.current else {
+            persistDraft()
+            return
+        }
+        title = session.title
+        date = session.date
+        sessionStart = session.sessionStart
+        restEndsAt = session.restEndsAt
+        let persistedSets = session.sets.map {
+            PersistedDraftSet(
+                exercise: $0.exercise,
+                primaryMuscle: $0.primaryMuscle,
+                exerciseOrder: $0.exerciseOrder,
+                weight: $0.weight,
+                reps: $0.reps,
+                setNumber: $0.setNumber,
+                isCompleted: $0.isCompleted
+            )
+        }
+        exercises = WorkoutInProgressEngine.draftExercises(from: persistedSets)
+    }
+
+    private func persistDraft() {
+        guard hasLoadedDraft, !isEditing else { return }
+        let now = Date.now
+        let session: WorkoutInProgress
+        if let existing = inProgressSessions.first {
+            session = existing
+        } else {
+            session = WorkoutInProgress(title: title, date: date, sessionStart: sessionStart, lastUpdated: now)
+            context.insert(session)
+        }
+        session.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Workout" : title
+        session.date = date
+        session.sessionStart = sessionStart
+        session.lastUpdated = now
+        session.restEndsAt = restEndsAt
+        if restEndsAt == nil {
+            session.restStartedAt = nil
+        } else if session.restStartedAt == nil {
+            session.restStartedAt = now
+        }
+
+        session.sets.forEach(context.delete)
+        session.sets = WorkoutInProgressEngine.persistedSets(from: exercises).map { draft in
+            let set = WorkoutInProgressSet(
+                exercise: draft.exercise,
+                primaryMuscle: draft.primaryMuscle,
+                exerciseOrder: draft.exerciseOrder,
+                weight: draft.weight,
+                reps: draft.reps,
+                setNumber: draft.setNumber,
+                isCompleted: draft.isCompleted
+            )
+            set.session = session
+            context.insert(set)
+            return set
+        }
+        do {
+            try context.save()
+        } catch {
+            logger.error("Workout draft save failed")
+            saveError = "Your unfinished workout could not be saved."
+        }
+    }
+
+    private func startRestTimer() {
+        let endsAt = Date.now.addingTimeInterval(TimeInterval(WorkoutInProgressEngine.defaultRestSeconds))
+        restEndsAt = endsAt
+        persistDraft()
+    }
+
+    private func discardDraft() {
+        inProgressSessions.forEach(context.delete)
+        do {
+            try context.save()
+            dismiss()
+        } catch {
+            logger.error("Workout draft discard failed")
+            context.rollback()
+            saveError = "Your unfinished workout could not be discarded."
+        }
     }
 
     private func save() {
-        let completedExercises = exercises.filter { !$0.sets.isEmpty }
+        let completedExercises = exercises.compactMap { exercise -> LoggedExercise? in
+            let completedSets = exercise.sets.filter(\.isCompleted)
+            guard !completedSets.isEmpty else { return nil }
+            return LoggedExercise(name: exercise.name, primaryMuscle: exercise.primaryMuscle, sets: completedSets)
+        }
         // Both modes: an empty workout is an error, never an implicit delete —
         // deletion has to be explicit and confirmed.
         guard !completedExercises.isEmpty else { showingEmptyAlert = true; return }
@@ -260,6 +409,10 @@ struct WorkoutLoggerView: View {
 
         do {
             try context.save()
+            if !isEditing {
+                inProgressSessions.forEach(context.delete)
+                try context.save()
+            }
             dismiss()
         } catch {
             logger.error("Workout save failed")
@@ -273,6 +426,7 @@ private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
     let previous: PreviousSetPerformance?
     let remove: () -> Void
+    let startRest: () -> Void
 
     private var previousSummary: String? {
         guard let previous else { return nil }
@@ -304,6 +458,14 @@ private struct ExerciseLoggerCard: View {
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
                     }
+                    Button {
+                        set.isCompleted.toggle()
+                        if set.isCompleted { startRest() }
+                    } label: {
+                        Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(set.isCompleted ? .mint : .secondary)
+                    }
+                    .buttonStyle(.borderless)
                     Button(role: .destructive) { exercise.sets.removeAll { $0.id == set.id } } label: { Image(systemName: "minus.circle") }
                         .buttonStyle(.borderless)
                 }

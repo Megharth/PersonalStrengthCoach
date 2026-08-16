@@ -53,11 +53,12 @@ XCTests.
 - **Routines/templates are now implemented**: saved routines can store ordered
   exercises with target sets/reps/optional weight, and the workout logger can
   start from a saved routine.
-- No **rest timer**, **RPE/RIR**, **warmup vs working set** flag, or **set type**
-  (drop set, failure) — limits both UX and analytics quality.
-- No **bodyweight/unit preference** (kg hardcoded throughout), no per-exercise
-  notes, no **workout-in-progress** state (logger is a one-shot sheet; a crash
-  or backgrounding loses everything).
+- No **RPE/RIR**, **warmup vs working set** flag, or **set type** (drop set,
+  failure) — limits both UX and analytics quality. The in-sheet rest timer and
+  durable workout-in-progress draft state are now shipped; ActivityKit/Live
+  Activities remain a separate deferred platform feature.
+- No **bodyweight/unit preference** (kg hardcoded throughout), or per-exercise
+  notes.
 
 **Analytics depth**
 - Basic per-workout and weekly estimated-1RM trends now exist, but there is still
@@ -105,9 +106,12 @@ XCTests.
 
 ### P1 — Logging experience
 4. **In-workout session** with rest timer and running volume. Persist a
-   `WorkoutInProgress` so backgrounding/crash doesn't lose data. *(The
-   "previous set" reference and editable prefill were split out of this item;
-   see 4a, shipped independently of the timer and persistence work.)*
+   `WorkoutInProgress` so backgrounding/crash doesn't lose data. **Shipped
+   2026-08-15** — includes resumable drafts, explicit resume/discard flows,
+   completed-set volume, elapsed-time reconstruction, and an absolute rest
+   deadline. ActivityKit/Live Activities remain separate. *(The "previous set"
+   reference and editable prefill were split out of this item; see 4a, shipped
+   independently of the timer and persistence work.)*
    - **4a. Previous-set reference + editable prefill in the logger** — shipped
      2026-08-15; scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
@@ -467,8 +471,8 @@ editing a set's weight changing `Workout.volume` and the recomputed estimated
 
 This is the "previous set" clause of P1 item 4 and the "Previous-set reference" /
 "'Last time' reference in the logger" entries in the UI review (§3.1). It ships
-independently of the rest timer and `WorkoutInProgress` persistence, which remain
-part of the larger deferred item 4.
+independently of the rest timer and `WorkoutInProgress` persistence, which are
+now also shipped under the completed item 4 implementation.
 
 **Implemented**
 - `ExerciseLoggerCard` shows the most recent prior performance under the exercise
@@ -482,9 +486,9 @@ part of the larger deferred item 4.
 - Added focused `PreviousSetTests` coverage for recency, aliases, edit exclusion,
   first-time exercises, ordering, equal-date determinism, and draft prefill.
 
-**Deferred**
-- Rest timer, running volume, and `WorkoutInProgress` persistence remain part of
-  the original item 4.
+**Related shipped implementation**
+- Rest timer, running volume, and `WorkoutInProgress` persistence are shipped
+  under item 4; ActivityKit/Live Activities remain deferred.
 
 **Scope**
 - In `ExerciseLoggerCard` (`WorkoutLoggerView.swift:140`), show the most recent
@@ -527,6 +531,6 @@ returns nil for a first-time exercise; orders sets by `setNumber`.
 2. **4.2 previous-set reference + editable prefill** — shipped independently of
    4.1; it shows the prior performance and initializes manually added exercises
    from it without overriding routine targets or edit drafts.
-
-Deferred to the original item 4: rest timer, running volume, and
-`WorkoutInProgress` persistence.
+3. **4.3 in-workout session** — shipped 2026-08-15; durable drafts, resume and
+   explicit discard/replacement, running volume, elapsed time, and in-sheet rest
+   timer. ActivityKit/Live Activities remain a separate deferred item.

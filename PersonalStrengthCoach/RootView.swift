@@ -125,12 +125,39 @@ struct DashboardView: View {
 struct WorkoutHistoryView: View {
     @Environment(\.modelContext) private var context
     let workouts: [Workout]
+    @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     @State private var showingLogger = false
+    @State private var showingStartConfirmation = false
     @State private var workoutPendingDeletion: Workout?
     @State private var errorMessage: String?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
+    private var activeDraft: WorkoutInProgress? { inProgressSessions.first }
+
     var body: some View { NavigationStack { List {
+        if let draft = activeDraft {
+            Section("Unfinished workout") {
+                Button { showingLogger = true } label: {
+                    HStack {
+                        Image(systemName: "arrow.clockwise.circle.fill")
+                            .foregroundStyle(.mint)
+                            .font(.title2)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Resume \(draft.title)")
+                                .font(.headline)
+                            Text("Started \(draft.sessionStart.formatted(date: .abbreviated, time: .shortened))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .foregroundStyle(.primary)
+            }
+        }
+
         if workouts.isEmpty {
             ContentUnavailableView("No workouts yet", systemImage: "dumbbell.fill", description: Text("Log your first session from the + menu to start tracking volume, PRs, and recovery."))
                 .listRowBackground(Color.clear)
@@ -149,13 +176,20 @@ struct WorkoutHistoryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { showingLogger = true } label: { Label("Log workout", systemImage: "plus.circle") }
+                    Button { startNewWorkoutTapped() } label: { Label("Log workout", systemImage: "plus.circle") }
                     NavigationLink { RoutinesListView() } label: { Label("Routines", systemImage: "list.bullet.rectangle") }
                     NavigationLink { StrongImportView() } label: { Label("Import from Strong", systemImage: "square.and.arrow.down") }
                 } label: { Image(systemName: "plus") }
             }
         }
         .sheet(isPresented: $showingLogger) { WorkoutLoggerView() }
+        .confirmationDialog("Resume unfinished workout?", isPresented: $showingStartConfirmation, titleVisibility: .visible) {
+            Button("Resume Workout") { showingLogger = true }
+            Button("Discard and Start New", role: .destructive) { discardDraftThenStartNew() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You have an unfinished workout in progress. Resume it, or discard it to start a new one.")
+        }
         .confirmationDialog("Delete workout?", isPresented: Binding(get: { workoutPendingDeletion != nil }, set: { if !$0 { workoutPendingDeletion = nil } }), titleVisibility: .visible) {
             Button("Delete Workout", role: .destructive) {
                 if let workout = workoutPendingDeletion { delete(workout) }
@@ -167,6 +201,26 @@ struct WorkoutHistoryView: View {
             Button("OK", role: .cancel) { }
         } message: { Text(errorMessage ?? "Please try again.") }
     } }
+
+    private func startNewWorkoutTapped() {
+        if activeDraft == nil {
+            showingLogger = true
+        } else {
+            showingStartConfirmation = true
+        }
+    }
+
+    private func discardDraftThenStartNew() {
+        inProgressSessions.forEach(context.delete)
+        do {
+            try context.save()
+            showingLogger = true
+        } catch {
+            logger.error("Workout draft replacement failed")
+            context.rollback()
+            errorMessage = "The unfinished workout could not be discarded."
+        }
+    }
 
     private func delete(_ workout: Workout) {
         context.delete(workout)     // cascade removes its ExerciseSet rows

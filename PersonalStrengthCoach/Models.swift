@@ -121,6 +121,53 @@ final class CustomExercise {
     var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }
 }
 
+/// A resumable, not-yet-completed workout. This intentionally stays separate
+/// from `Workout`: abandoned drafts must never appear in training history.
+@Model
+final class WorkoutInProgress {
+    var title: String
+    var date: Date
+    var sessionStart: Date
+    var lastUpdated: Date
+    var restStartedAt: Date?
+    var restEndsAt: Date?
+    @Relationship(deleteRule: .cascade, inverse: \WorkoutInProgressSet.session) var sets: [WorkoutInProgressSet]
+
+    init(title: String = "Workout", date: Date = .now, sessionStart: Date = .now, lastUpdated: Date = .now, sets: [WorkoutInProgressSet] = []) {
+        self.title = title
+        self.date = date
+        self.sessionStart = sessionStart
+        self.lastUpdated = lastUpdated
+        self.restStartedAt = nil
+        self.restEndsAt = nil
+        self.sets = sets
+    }
+}
+
+@Model
+final class WorkoutInProgressSet {
+    var exercise: String
+    var primaryMuscleRaw: String
+    var exerciseOrder: Int
+    var weight: Double
+    var reps: Int
+    var setNumber: Int
+    var isCompleted: Bool
+    var session: WorkoutInProgress?
+
+    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false) {
+        self.exercise = exercise
+        self.primaryMuscleRaw = primaryMuscle.rawValue
+        self.exerciseOrder = exerciseOrder
+        self.weight = weight
+        self.reps = reps
+        self.setNumber = setNumber
+        self.isCompleted = isCompleted
+    }
+
+    var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }
+}
+
 enum ExerciseCatalog {
     static func normalize(_ name: String) -> String {
         let key = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)

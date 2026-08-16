@@ -78,6 +78,8 @@ Tap the **+** menu (top-right) to:
 - **Routines** — View and manage saved workout templates (see Routines below).
 - **Import from Strong** — Migrate your history from the Strong app (CSV, JSON, or shared-workout text).
 
+If a workout was started but not finished, History shows a **Resume** card. Starting another workout asks whether to resume the draft, discard it and start fresh, or cancel; an unfinished workout is never silently replaced.
+
 ---
 
 ## 💓 Recovery Tab
@@ -139,6 +141,9 @@ Log training sessions with exercise-by-exercise tracking.
 - **Custom exercises** — Add any movement not in the built-in library. Assign it a primary muscle group for accurate recovery tracking.
 - **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, and reps.
 - **Duration tracking** — Workout duration is automatically calculated from session start to save time.
+- **Resumable sessions** — The in-progress workout is persisted on-device, including exercise/set values, completion state, elapsed time, and an absolute rest-timer deadline. The Session section shows completed-set volume and elapsed time while logging. Backgrounding and view recreation restore the draft; History provides an explicit Resume action after relaunch.
+- **Rest timer** — Completing a set starts a 90-second in-sheet countdown; it survives backgrounding and view recreation and never displays negative time. The timer is a local in-sheet indicator; ActivityKit/Live Activities are not part of this feature.
+- **Draft safety** — Unfinished drafts are excluded from completed-workout exports. Delete All Local Data removes drafts and their saved sets. Saving a completed workout removes its draft only after the completed save succeeds; invalid or failed saves leave the draft recoverable. Discard is explicit and confirmed.
 - **Start from Routine** — Load a saved routine to pre-fill exercises and target sets/reps (see below). Routine targets take precedence over previous-workout prefill.
 
 **Tips:**
@@ -209,8 +214,8 @@ Migrate your training history from the Strong app.
 Manage your data and privacy.
 
 **What's here:**
-- **Export All Data** — Export your complete training history (workouts, sets, recovery data, custom exercises, routines) as a JSON file. Use this for backups or to migrate to another device.
-- **Delete All Local Data** — Permanently erase all workouts, recovery data, custom exercises, and routines. This cannot be undone. Apple Health data is unaffected.
+- **Export All Data** — Export your complete completed-workout history (workouts, sets, recovery data, custom exercises, routines) as a JSON file. Unfinished workout drafts are intentionally excluded. Use this for backups or to migrate to another device.
+- **Delete All Local Data** — Permanently erase all workouts, unfinished workout drafts and their saved sets, recovery data, custom exercises, and routines. This cannot be undone. Apple Health data is unaffected.
 - **HealthKit Sync** — The app automatically syncs sleep, HRV, resting heart rate, and body mass from Apple Health on every app launch. If sync fails, you'll see a retry prompt.
 
 **Privacy & permissions:**

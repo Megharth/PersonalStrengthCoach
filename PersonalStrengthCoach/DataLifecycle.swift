@@ -241,12 +241,20 @@ enum AppSchemaV3: VersionedSchema {
     static var models: [any PersistentModel.Type] { [Workout.self, ExerciseSet.self, DailyRecovery.self, CustomExercise.self, Routine.self, RoutineExercise.self] }
 }
 
+enum AppSchemaV4: VersionedSchema {
+    static var versionIdentifier = Schema.Version(4, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [Workout.self, ExerciseSet.self, DailyRecovery.self, CustomExercise.self, Routine.self, RoutineExercise.self, WorkoutInProgress.self, WorkoutInProgressSet.self]
+    }
+}
+
 enum AppMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self, AppSchemaV3.self] }
+    static var schemas: [any VersionedSchema.Type] { [AppSchemaV1.self, AppSchemaV2.self, AppSchemaV3.self, AppSchemaV4.self] }
     static var stages: [MigrationStage] {
         [
             .lightweight(fromVersion: AppSchemaV1.self, toVersion: AppSchemaV2.self),
             .lightweight(fromVersion: AppSchemaV2.self, toVersion: AppSchemaV3.self),
+            .lightweight(fromVersion: AppSchemaV3.self, toVersion: AppSchemaV4.self),
         ]
     }
 }
@@ -292,7 +300,7 @@ struct DataManagementView: View {
 
     private func prepareExport() {
         let payload = PersonalStrengthExport(
-            schemaVersion: 3,
+            schemaVersion: 4,
             exportedAt: .now,
             workouts: workouts.map { workout in
                 WorkoutExport(date: workout.date, title: workout.title, durationMinutes: workout.durationMinutes, calories: workout.calories, notes: workout.notes, sets: workout.sets.map { set in
@@ -329,6 +337,8 @@ struct DataManagementView: View {
             try context.delete(model: CustomExercise.self)
             try context.delete(model: Routine.self)
             try context.delete(model: RoutineExercise.self)
+            try context.delete(model: WorkoutInProgress.self)
+            try context.delete(model: WorkoutInProgressSet.self)
             try context.save()
         } catch {
             context.rollback()

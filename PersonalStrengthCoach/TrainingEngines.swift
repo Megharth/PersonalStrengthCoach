@@ -237,3 +237,90 @@ enum WorkoutTimerEngine {
         max(1, min(240, minutes))
     }
 }
+
+enum WorkoutInProgressEngine {
+    static let defaultRestSeconds = 90
+
+    static func volume(of exercises: [LoggedExercise]) -> Double {
+        exercises.reduce(0) { total, exercise in
+            total + exercise.sets.reduce(0) { total, set in
+                guard set.isCompleted else { return total }
+                return total + set.weight * Double(set.reps)
+            }
+        }
+    }
+
+    static func elapsedSeconds(start: Date, now: Date) -> Int {
+        max(0, Int(now.timeIntervalSince(start)))
+    }
+
+    static func remainingRestSeconds(endsAt: Date?, now: Date) -> Int? {
+        guard let endsAt else { return nil }
+        return max(0, Int(ceil(endsAt.timeIntervalSince(now))))
+    }
+
+    /// Treat unfinished workout state as a singleton. The newest update wins;
+    /// any older rows are stray duplicates that callers should remove.
+    static func resolveActiveSession(among sessions: [WorkoutInProgress]) -> (current: WorkoutInProgress?, strays: [WorkoutInProgress]) {
+        let ordered = sessions.sorted {
+            if $0.lastUpdated != $1.lastUpdated { return $0.lastUpdated > $1.lastUpdated }
+            return ObjectIdentifier($0).hashValue < ObjectIdentifier($1).hashValue
+        }
+        return (ordered.first, Array(ordered.dropFirst()))
+    }
+}
+
+struct PersistedDraftSet {
+    let exercise: String
+    let primaryMuscle: MuscleGroup
+    let exerciseOrder: Int
+    let weight: Double
+    let reps: Int
+    let setNumber: Int
+    let isCompleted: Bool
+
+    init(exercise: String, primaryMuscle: MuscleGroup, exerciseOrder: Int, weight: Double, reps: Int, setNumber: Int, isCompleted: Bool = false) {
+        self.exercise = exercise
+        self.primaryMuscle = primaryMuscle
+        self.exerciseOrder = exerciseOrder
+        self.weight = weight
+        self.reps = reps
+        self.setNumber = setNumber
+        self.isCompleted = isCompleted
+    }
+}
+
+extension WorkoutInProgressEngine {
+    static func persistedSets(from exercises: [LoggedExercise]) -> [PersistedDraftSet] {
+        exercises.enumerated().flatMap { exerciseIndex, exercise in
+            exercise.sets.enumerated().map { setIndex, set in
+                PersistedDraftSet(
+                    exercise: exercise.name,
+                    primaryMuscle: exercise.primaryMuscle,
+                    exerciseOrder: exerciseIndex,
+                    weight: set.weight,
+                    reps: set.reps,
+                    setNumber: setIndex + 1,
+                    isCompleted: set.isCompleted
+                )
+            }
+        }
+    }
+
+    static func draftExercises(from sets: [PersistedDraftSet]) -> [LoggedExercise] {
+        Dictionary(grouping: sets, by: { $0.exerciseOrder })
+            .sorted { $0.key < $1.key }
+            .map { _, group in
+                let ordered = group.sorted { $0.setNumber < $1.setNumber }
+                guard let first = ordered.first else { return nil }
+                return LoggedExercise(
+                    name: first.exercise,
+                    primaryMuscle: first.primaryMuscle,
+                    sets: ordered.map {
+                        EditableSet(weight: $0.weight, reps: $0.reps, isCompleted: $0.isCompleted)
+                    }
+                )
+            }
+            .compactMap { $0 }
+    }
+}
