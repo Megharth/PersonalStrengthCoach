@@ -38,19 +38,25 @@ The Settings tab exports local workouts, recovery records, and custom exercises 
 
 ## Project structure
 
-```text
-PersonalStrengthCoach/
-├── PersonalStrengthCoachApp.swift   App entry point and SwiftData container
-├── Models.swift                     Persistent models and exercise catalog
-├── RootView.swift                   Main tabs, dashboard, and workout history
-├── WorkoutLoggerView.swift          Workout and custom-exercise logging
-├── StrongImportView.swift           Strong export parsing and import
-├── TrainingEngines.swift            Readiness, performance, and recommendations
-├── RecoveryAndCoachViews.swift      Recovery, exercise trends, and coach UI
-├── AIInsightService.swift           Proxy-only AI coaching client
-├── Components.swift                 Reusable cards and charts
-└── SeedData.swift                   First-launch sample data
-```
+The source is organized by data models and lifecycle (`Models.swift`,
+`DataLifecycle.swift`), pure calculations (`TrainingEngines.swift`), domain UI
+(`RootView.swift`, `WorkoutLoggerView.swift`, `RoutinesView.swift`, and
+`RecoveryAndCoachViews.swift`), HealthKit/import/AI services, and focused XCTest
+suites. The maintained file-to-feature routing map, current schema version, and
+feature-shipping checklist live in `CLAUDE.md`; use it instead of maintaining a
+second file list here. Run `Scripts/check-doc-freshness.sh` to detect drift in
+that map.
+
+The roadmap and current next item live in `SPEC.md`. User-visible behavior is
+documented in `FEATURES.md`.
+
+## Documentation workflow
+
+For a fresh feature-planning session, use the project-local `/next-feature`
+command. It reads the current-focus pointer, validates the implementation map,
+and narrows source inspection to the selected feature instead of repeating a
+full repository survey.
+
 
 ## Coach integration status
 

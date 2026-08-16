@@ -1,6 +1,19 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-15
+**Status:** Active · **Last updated:** 2026-08-16
+
+## Current focus
+
+**Next explicitly sequenced item:** P1 Logging experience, item 6 — **Plate
+calculator and unit preference (kg/lb) app-wide**.
+
+**Other open queues:** P1 Analytics (progress-screen completion, weekly volume
+per muscle, and PR history) and P1 Platform Integration (widgets, notifications,
+and Live Activity) remain open. If “next” could mean one of these queues, choose
+the order explicitly rather than inferring it from historical review prose.
+
+Section 2 and this pointer are authoritative for current status. Sections 3 and
+4 are historical reference; their file/line citations must be re-verified.
 
 This document proposes features and improvements for Personal Strength Coach, an
 on-device iOS strength-training tracker (SwiftUI + SwiftData, Apple frameworks
@@ -152,9 +165,7 @@ XCTests.
 
 ## 3. Expert reviews
 
-_The following sections are preserved as point-in-time specialist reviews. Some
-P0 findings described below were resolved on 2026-08-11; the checklists and
-status notes in Section 2 are authoritative for current implementation status._
+_**Historical snapshot — not a current implementation map.** The following sections are preserved as point-in-time specialist reviews. Their file/line citations reflect the code at the time of review and may no longer match current lines or logic. Re-verify every citation against source before using it. Section 2 and `## Current focus` are authoritative for current implementation status._
 
 ### 3.1 UI / Frontend review
 
@@ -391,6 +402,11 @@ not by editing `Models.swift` in place; calc changes get tests in
 ---
 
 ## 4. Addendum — logging corrections & reference (2026-08-13)
+
+> **Historical snapshot — not a current implementation map.** This addendum records
+> decisions and shipped scope at the time it was written. File/line citations may
+> be stale; re-verify them against source before use. Section 2 and `## Current
+> focus` are authoritative for current status.
 
 Two requested features, scoped. Neither needs a schema change, a new HealthKit
 type, or a third-party dependency. Priority was set as: **4.1 is P0**
