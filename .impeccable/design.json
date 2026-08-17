@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-16T00:00:00Z",
+  "title": "Design System: Personal Strength Coach",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Training Mint",
+        "canonical": "Color.mint",
+        "tonalRamp": ["#073B2A", "#0B6548", "#16805C", "#32A878", "#63C99B", "#98E1BB", "#C6F0D8", "#ECFBF2"]
+      },
+      "positive": {
+        "role": "positive",
+        "displayName": "Training Mint",
+        "canonical": "Color.mint",
+        "tonalRamp": ["#073B2A", "#0B6548", "#16805C", "#32A878", "#63C99B", "#98E1BB", "#C6F0D8", "#ECFBF2"]
+      },
+      "caution": {
+        "role": "tertiary",
+        "displayName": "Caution Yellow",
+        "canonical": "Color.yellow",
+        "tonalRamp": ["#4A3500", "#785800", "#A47700", "#C99B00", "#E5BC24", "#F0D46B", "#F8E9A8", "#FFF9E5"]
+      },
+      "alert": {
+        "role": "tertiary",
+        "displayName": "Alert Red",
+        "canonical": "Color.red",
+        "tonalRamp": ["#4A0710", "#790F1B", "#A91E2B", "#CF3C4A", "#E66D78", "#F2A4AA", "#F8D0D3", "#FCEEEF"]
+      },
+      "performance": {
+        "role": "secondary",
+        "displayName": "Performance Orange",
+        "canonical": "Color.orange",
+        "tonalRamp": ["#4A1D00", "#783300", "#A74B00", "#CD6810", "#E9913D", "#F3B875", "#F9D8AC", "#FFF3E3"]
+      },
+      "recovery": {
+        "role": "secondary",
+        "displayName": "Recovery Indigo",
+        "canonical": "Color.indigo",
+        "tonalRamp": ["#171042", "#29217A", "#3F35A2", "#5B50C2", "#8178D8", "#AAA4E7", "#D1CEF2", "#F0EFFB"]
+      },
+      "heart": {
+        "role": "secondary",
+        "displayName": "Heart Pink",
+        "canonical": "Color.pink",
+        "tonalRamp": ["#4B082D", "#7C124D", "#A9216A", "#C94386", "#E071A8", "#EEA4C7", "#F7CEE0", "#FCEEF5"]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Grouped Background",
+        "canonical": "Color(uiColor: .systemGroupedBackground)",
+        "tonalRamp": ["#000000", "#111214", "#242528", "#3A3B3E", "#77787B", "#B7B8BA", "#E4E4E6", "#F8F8FA"]
+      },
+      "neutral-surface": {
+        "role": "neutral",
+        "displayName": "Grouped Surface",
+        "canonical": "Color(uiColor: .secondarySystemGroupedBackground)",
+        "tonalRamp": ["#08090A", "#18191B", "#2B2C2F", "#444548", "#858689", "#C1C1C3", "#E9E9EB", "#FFFFFF"]
+      },
+      "primary-label": {
+        "role": "neutral",
+        "displayName": "Primary Label",
+        "canonical": "Color.primary",
+        "tonalRamp": ["#000000", "#18191B", "#333437", "#55565A", "#85868A", "#B7B8BA", "#E3E3E5", "#FFFFFF"]
+      },
+      "secondary-label": {
+        "role": "neutral",
+        "displayName": "Secondary Label",
+        "canonical": "Color.secondary",
+        "tonalRamp": ["#222326", "#3D3E41", "#5A5B5F", "#77787C", "#98999D", "#B9B9BC", "#D7D7D9", "#F1F1F2"]
+      },
+      "tertiary-label": {
+        "role": "neutral",
+        "displayName": "Tertiary Label",
+        "canonical": "Color.tertiary",
+        "tonalRamp": ["#3A3B3E", "#57585B", "#737478", "#8E8F92", "#A9AAAD", "#C4C4C7", "#DFDFE1", "#F6F6F7"]
+      },
+      "material": {
+        "role": "neutral",
+        "displayName": "Thin Material",
+        "canonical": ".thinMaterial",
+        "tonalRamp": ["rgba(0,0,0,.72)", "rgba(0,0,0,.56)", "rgba(0,0,0,.40)", "rgba(0,0,0,.26)", "rgba(255,255,255,.18)", "rgba(255,255,255,.34)", "rgba(255,255,255,.54)", "rgba(255,255,255,.78)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "System Display", "purpose": "Large titles and exercise detail names; bold landmarks without ornamental display type." },
+      "headline": { "displayName": "System Headline", "purpose": "Workout titles, exercise names, card headings, and list-row anchors." },
+      "title": { "displayName": "System Title", "purpose": "Section headings and prominent metric values." },
+      "body": { "displayName": "System Body", "purpose": "Explanations, coach responses, user-entered content, and native controls." },
+      "label": { "displayName": "System Label", "purpose": "Units, dates, state labels, and supporting metadata." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "system-transitions", "value": "platform default", "purpose": "Use native push, sheet, dismissal, and control transitions; honor Reduce Motion." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Native prominent action used for the main choice in an empty state or focused flow.",
+      "html": "<button class=\"ds-btn-primary\"><span>Choose file</span></button>",
+      "css": ".ds-btn-primary { background: #32A878; color: #ffffff; padding: 12px 18px; border: 0; border-radius: 10px; font: 600 17px -apple-system, BlinkMacSystemFont, sans-serif; min-height: 44px; } .ds-btn-primary:hover { background: #16805C; } .ds-btn-primary:focus-visible { outline: 3px solid rgba(50,168,120,.45); outline-offset: 2px; } .ds-btn-primary:active { background: #0B6548; }"
+    },
+    {
+      "name": "Metric Card",
+      "kind": "card",
+      "refersTo": "metric-card",
+      "description": "Compact comparable measurement tile with a colored symbol, quiet label, and bold value.",
+      "html": "<article class=\"ds-metric-card\"><div class=\"ds-metric-icon\">✦</div><div class=\"ds-metric-label\">Sleep</div><strong>7.4 <small>hours</small></strong></article>",
+      "css": ".ds-metric-card { background: #2B2C2F; color: #F5F5F7; border-radius: 18px; padding: 14px; min-height: 120px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-metric-icon { color: #8178D8; font-size: 20px; } .ds-metric-label { color: #A9AAAD; font-size: 13px; } .ds-metric-card strong { font-size: 22px; } .ds-metric-card small { color: #A9AAAD; font-size: 12px; font-weight: 400; }"
+    },
+    {
+      "name": "Coach Card",
+      "kind": "card",
+      "refersTo": "coach-card",
+      "description": "Full-width contextual guidance surface pairing a mint symbol with a headline and readable detail.",
+      "html": "<article class=\"ds-coach-card\"><div class=\"ds-coach-symbol\">✦</div><div><h3>Progression</h3><p>Prioritize small, repeatable progressions.</p></div></article>",
+      "css": ".ds-coach-card { display: flex; gap: 14px; align-items: flex-start; background: #2B2C2F; color: #F5F5F7; border-radius: 18px; padding: 17px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-coach-symbol { color: #32A878; font-size: 20px; width: 28px; } .ds-coach-card h3 { margin: 0 0 6px; font-size: 17px; } .ds-coach-card p { margin: 0; color: #B9B9BC; font-size: 15px; line-height: 1.35; }"
+    },
+    {
+      "name": "Readiness Card",
+      "kind": "custom",
+      "refersTo": "readiness-card",
+      "description": "Signature compass-like readiness summary with a circular score, interpretation, and factors.",
+      "html": "<article class=\"ds-readiness-card\"><div class=\"ds-readiness-ring\"><strong>82</strong><small>/ 100</small></div><div><b>READINESS</b><h2>Ready to perform</h2><p>Sleep · HRV · recent load</p></div></article>",
+      "css": ".ds-readiness-card { display: flex; gap: 18px; align-items: center; background: rgba(42,43,46,.84); color: #F5F5F7; border-radius: 24px; padding: 18px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-readiness-ring { width: 105px; height: 105px; border: 11px solid rgba(50,168,120,.22); border-top-color: #32A878; border-right-color: #32A878; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ds-readiness-ring strong { font-size: 22px; } .ds-readiness-ring small { color: #B9B9BC; font-size: 12px; } .ds-readiness-card b { color: #32A878; font-size: 12px; } .ds-readiness-card h2 { margin: 8px 0; font-size: 19px; } .ds-readiness-card p { margin: 0; color: #B9B9BC; font-size: 13px; }"
+    },
+    {
+      "name": "Trend Chart",
+      "kind": "custom",
+      "refersTo": "trend-chart",
+      "description": "A restrained history visualization whose styling remains subordinate to real dates, units, and gaps.",
+      "html": "<div class=\"ds-trend-chart\"><h3>Estimated 1RM</h3><svg viewBox=\"0 0 320 100\" role=\"img\" aria-label=\"Estimated 1RM trend\"><path d=\"M8 76 C70 68 92 72 135 51 S220 55 312 18\" fill=\"none\" stroke=\"#32A878\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M8 76 C70 68 92 72 135 51 S220 55 312 18 L312 92 L8 92 Z\" fill=\"rgba(50,168,120,.12)\"/></svg></div>",
+      "css": ".ds-trend-chart { background: #2B2C2F; color: #F5F5F7; border-radius: 18px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-trend-chart h3 { margin: 0 0 10px; font-size: 17px; } .ds-trend-chart svg { display: block; width: 100%; height: 130px; }"
+    },
+    {
+      "name": "Native Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "System tab and navigation-stack treatment with a single mint tint and SF Symbol labels.",
+      "html": "<nav class=\"ds-nav\"><a class=\"active\">⌂<span>Today</span></a><a>⌁<span>Dashboard</span></a><a>◷<span>History</span></a><a>♡<span>Recovery</span></a></nav>",
+      "css": ".ds-nav { display: flex; justify-content: space-around; gap: 8px; padding: 10px 8px; background: #18191B; font-family: -apple-system, BlinkMacSystemFont, sans-serif; } .ds-nav a { color: #A9AAAD; min-width: 44px; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-decoration: none; font-size: 20px; } .ds-nav a span { font-size: 11px; } .ds-nav a.active { color: #32A878; } .ds-nav a:focus-visible { outline: 3px solid rgba(50,168,120,.45); outline-offset: -2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Recovery Compass",
+    "overview": "Personal Strength Coach should feel like a calm instrument panel for a solo lifter: a trustworthy compass that helps them orient around today's training without competing with the work itself. The interface is native iOS first—quiet, legible, and familiar—while its mint accent gives moments of progress and readiness a distinct signal. The visual system supports the product's core promise of making real history and recovery context understandable, not of manufacturing a spectacle from sparse data.\n\nThe tone is quiet and premium. Spacious grouped surfaces, system typography, restrained icon color, and soft tonal separation do the visual work. Density increases where logging requires it, but the surrounding hierarchy remains composed. Use the platform's semantic colors, materials, navigation, lists, forms, sheets, and controls rather than imitating a web dashboard. The confirmed anti-reference is fake dashboards: decorative metrics, unsupported precision, and chart ornament without meaningful history are out of character.",
+    "keyCharacteristics": [
+      "Native iOS fluency over bespoke chrome.",
+      "Calm, dark-mode-first tonal layering with one mint signal.",
+      "Progress and recovery presented as honest, contextual guidance.",
+      "Compact task surfaces balanced by generous review surfaces."
+    ],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "Mint is the product's primary voice. Keep it for interaction, completion, readiness, and progress; do not spread accent color across every label or surface.", "section": "colors" },
+      { "name": "The Evidence Color Rule", "body": "A color must explain a state or metric category. Never use a hue to make an empty, estimated, or unsupported value look more authoritative.", "section": "colors" },
+      { "name": "The System Type Rule", "body": "Use Dynamic Type styles and system weights; do not introduce fixed-size text or a branded font that makes logging or accessibility less reliable.", "section": "typography" },
+      { "name": "The Tonal Layer Rule", "body": "Separate a surface from its page with semantic system backgrounds first; do not add a shadow to compensate for a missing information hierarchy.", "section": "elevation" },
+      { "name": "The Material Is Rare Rule", "body": "Material is a contextual surface treatment, not a default card background.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use SwiftUI/UIKit semantic colors so the system remains legible in Dark Mode and increased-contrast settings.",
+      "Do keep mint scarce and meaningful: interaction, completion, readiness-positive states, and genuine progress.",
+      "Do use system text styles, native controls, SF Symbols, sheets, lists, forms, alerts, and confirmation dialogs.",
+      "Do show the user's real history honestly, distinguishing missing, estimated, and low-confidence data from a measured zero.",
+      "Do use flexible grids, safe-area-aware scrolling, and at least 44pt touch targets.",
+      "Do treat readiness and recommendations as wellness/training guidance, with context and uncertainty visible in the copy.",
+      "Do honor Reduce Motion and preserve native navigation gestures."
+    ],
+    "donts": [
+      "Don't create fake dashboards: no decorative KPI walls, fabricated values, unsupported precision, or charts without meaningful data.",
+      "Don't use raw hex colors, bespoke web navigation, glassmorphism, custom shadows, or a third-party icon set.",
+      "Don't make every surface mint, colorful, pill-shaped, or elevated; quiet tonal layering is the default.",
+      "Don't hide meaningful chart axes, dates, units, gaps, or confidence information for visual cleanliness.",
+      "Don't frame readiness, HRV, sleep, or recommendations as diagnosis or certainty.",
+      "Don't replace native forms and controls with custom controls that reduce platform familiarity or accessibility."
+    ]
+  }
+}
