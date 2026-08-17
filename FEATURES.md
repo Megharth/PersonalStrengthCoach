@@ -135,7 +135,9 @@ Log training sessions with exercise-by-exercise tracking.
 4. For each exercise, log sets with weight in your selected kg/lb unit, reps, set type, and optional RPE. Saved values remain canonical kilograms.
    Set types distinguish warmups, working sets, drop sets, and failure sets. When
    the exercise has prior history, the corresponding sets are prefilled from the
-   most recent workout and remain fully editable; prior RPE is never copied.
+   most recent workout and remain fully editable; prior RPE is never copied. Adding
+   another set continues any remaining historical defaults, then carries forward
+   the current set's weight, reps, and type without copying completion or RPE.
 5. Tap **Save** when complete.
 
 **Features:**

@@ -79,6 +79,18 @@ enum WorkoutEditorLogic {
         original.subtracting(remaining)
     }
 
+    /// Selects safe defaults for the next draft row without carrying completion
+    /// state or subjective effort from a previous set.
+    static func nextSetDefaults(current: [EditableSet], previous: PreviousSetPerformance?) -> EditableSet {
+        if let historical = previous?.sets[safe: current.count] {
+            return EditableSet(weight: historical.weight, reps: historical.reps, setType: historical.setType)
+        }
+        if let last = current.last {
+            return EditableSet(weight: last.weight, reps: last.reps, setType: last.setType)
+        }
+        return EditableSet()
+    }
+
     /// Rebuilds editable exercise blocks from a workout's unordered `sets`
     /// relationship. Blocks are keyed on the raw `exercise` string (never
     /// `normalizedExercise`, which would rename the user's entry), ordered
@@ -464,45 +476,62 @@ private struct ExerciseLoggerCard: View {
         Section {
             ForEach($exercise.sets) { $set in
                 let index = exercise.sets.firstIndex(where: { $0.id == set.id }) ?? 0
-                HStack {
-                    Text("\(index + 1)")
-                        .font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 18)
-                    NumericFieldDouble(value: Binding(
-                        get: { weightUnit.fromKilograms(set.weight) },
-                        set: { set.weight = max(0, weightUnit.toKilograms($0)) }
-                    ), title: weightUnit.symbol)
-                    NumericFieldInt(value: $set.reps, title: "reps")
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text("\(index + 1)")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24)
+                            .frame(minHeight: 44)
+                            .accessibilityLabel("Set \(index + 1)")
+                        NumericFieldDouble(value: Binding(
+                            get: { weightUnit.fromKilograms(set.weight) },
+                            set: { set.weight = max(0, weightUnit.toKilograms($0)) }
+                        ), title: weightUnit.symbol)
+                        NumericFieldInt(value: $set.reps, title: "reps")
+                        TextField("RPE", value: $set.rpe, format: .number.precision(.fractionLength(1)))
+                            .keyboardType(.decimalPad)
+                            .frame(width: 56)
+                            .multilineTextAlignment(.center)
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityLabel("Optional RPE for set \(index + 1)")
+                        Button {
+                            set.isCompleted.toggle()
+                            if set.isCompleted { startRest() }
+                        } label: {
+                            Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(set.isCompleted ? .mint : .secondary)
+                                .frame(minWidth: 44, minHeight: 44)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(set.isCompleted ? "Mark set \(index + 1) incomplete" : "Mark set \(index + 1) complete")
+                    }
                     Picker("Set type", selection: $set.setType) {
                         ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
                     }
-                    .labelsHidden()
                     .pickerStyle(.menu)
-                    .accessibilityLabel("Set type")
-                    TextField("RPE", value: $set.rpe, format: .number.precision(.fractionLength(1)))
-                        .keyboardType(.decimalPad)
-                        .frame(width: 48)
-                        .multilineTextAlignment(.center)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Optional RPE")
+                    .accessibilityLabel("Set \(index + 1) type")
                     if let previousSet = previous?.sets[safe: index] {
-                        Text("\(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol) × \(previousSet.reps)")
+                        Text("Previous: \(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol) × \(previousSet.reps)")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
+                            .accessibilityLabel("Previous performance: \(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol), \(previousSet.reps) reps")
                     }
-                    Button {
-                        set.isCompleted.toggle()
-                        if set.isCompleted { startRest() }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        exercise.sets.removeAll { $0.id == set.id }
                     } label: {
-                        Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(set.isCompleted ? .mint : .secondary)
+                        Label("Delete set", systemImage: "trash")
                     }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) { exercise.sets.removeAll { $0.id == set.id } } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless)
                 }
             }
-            Button { exercise.sets.append(EditableSet()) } label: { Label("Add set", systemImage: "plus") }
+            Button {
+                exercise.sets.append(WorkoutEditorLogic.nextSetDefaults(current: exercise.sets, previous: previous))
+            } label: {
+                Label("Add set", systemImage: "plus")
+            }
         } header: {
             HStack {
                 VStack(alignment: .leading) {
@@ -513,7 +542,10 @@ private struct ExerciseLoggerCard: View {
                     }
                 }
                 Spacer()
-                Button(role: .destructive, action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless)
+                Button(role: .destructive, action: remove) { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("Remove \(exercise.name)")
             }
         }
     }

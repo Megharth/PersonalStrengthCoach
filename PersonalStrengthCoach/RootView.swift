@@ -22,9 +22,13 @@ struct RootView: View {
         .tint(.mint)
         .task {
             #if DEBUG
+            #if targetEnvironment(simulator)
             SeedData.loadIfNeeded(context: context, workouts: workouts)
             #endif
+            #endif
+            #if !targetEnvironment(simulator)
             await syncHealthKit()
+            #endif
         }
         .alert(healthKitAlert?.title ?? "Health data", isPresented: Binding(get: { healthKitAlert != nil }, set: { if !$0 { healthKitAlert = nil } })) {
             Button("Retry") { Task { await syncHealthKit() } }

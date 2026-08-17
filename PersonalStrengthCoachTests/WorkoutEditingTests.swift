@@ -40,6 +40,54 @@ final class WorkoutEditorLogicTests: XCTestCase {
         XCTAssertEqual(WorkoutEditorLogic.removedSetIDs(original: original, remaining: []), original)
     }
 
+    func testNextSetDefaultsContinuesHistoricalSequenceBeforeCopyingCurrentSet() {
+        let historical = PreviousSetPerformance(
+            sets: [
+                makeSet("Bench Press", weight: 80, reps: 8, setNumber: 1),
+                makeSet("Bench Press", weight: 82.5, reps: 6, setNumber: 2, muscle: .chest)
+            ],
+            date: .now
+        )
+        let current = [EditableSet(weight: 70, reps: 10, isCompleted: true, setType: .warmup, rpe: 7)]
+
+        let next = WorkoutEditorLogic.nextSetDefaults(current: current, previous: historical)
+
+        XCTAssertEqual(next.weight, 82.5)
+        XCTAssertEqual(next.reps, 6)
+        XCTAssertEqual(next.setType, .working)
+        XCTAssertFalse(next.isCompleted)
+        XCTAssertNil(next.rpe)
+    }
+
+    func testNextSetDefaultsCopiesLastCurrentSetAfterHistoryIsExhausted() {
+        let historical = PreviousSetPerformance(
+            sets: [makeSet("Squat", weight: 140, reps: 5, setNumber: 1, muscle: .quads)],
+            date: .now
+        )
+        let current = [
+            EditableSet(weight: 100, reps: 8, setType: .warmup),
+            EditableSet(weight: 120, reps: 5, isCompleted: true, setType: .dropSet, rpe: 9)
+        ]
+
+        let next = WorkoutEditorLogic.nextSetDefaults(current: current, previous: historical)
+
+        XCTAssertEqual(next.weight, 120)
+        XCTAssertEqual(next.reps, 5)
+        XCTAssertEqual(next.setType, .dropSet)
+        XCTAssertFalse(next.isCompleted)
+        XCTAssertNil(next.rpe)
+    }
+
+    func testNextSetDefaultsUsesBlankDefaultsWhenThereIsNoSourceSet() {
+        let next = WorkoutEditorLogic.nextSetDefaults(current: [], previous: nil)
+
+        XCTAssertEqual(next.weight, 0)
+        XCTAssertEqual(next.reps, 8)
+        XCTAssertEqual(next.setType, .working)
+        XCTAssertFalse(next.isCompleted)
+        XCTAssertNil(next.rpe)
+    }
+
     func testEditableExercisesGroupsByRawExerciseNameNotNormalizedName() {
         // "Barbell Bench Press" normalizes to "Bench Press"; the draft must keep the
         // user's raw entry, not silently rename it.
