@@ -31,6 +31,8 @@ struct StrongImportResult {
 
 struct StrongImportView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     @Environment(\.modelContext) private var context
     @Query private var existingWorkouts: [Workout]
     @State private var showingFilePicker = false
@@ -61,7 +63,7 @@ struct StrongImportView: View {
                                 Text(workout.title).font(.headline)
                                 Text(workout.date.formatted(date: .abbreviated, time: .shortened))
                                     .font(.subheadline).foregroundStyle(.secondary)
-                                Text("\(workout.sets.count) sets · \(Int(workout.sets.reduce(0) { $0 + $1.weight * Double($1.reps) }).formatted()) kg")
+                                Text("\(workout.sets.count) sets · \(weightUnit.formattedWithUnit(workout.sets.reduce(0) { $0 + $1.weight * Double($1.reps) }, fractionDigits: 0))")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
                         }
@@ -293,7 +295,7 @@ enum StrongImportParser {
                 continue
             }
             let unit = match.range(at: 2).location == NSNotFound ? "kg" : String(line[Range(match.range(at: 2), in: line)!]).lowercased()
-            let weightKg = unit.hasPrefix("lb") ? weight * 0.453_592_37 : weight
+            let weightKg = unit.hasPrefix("lb") ? WeightUnit.pounds.toKilograms(weight) : weight
             if let set = makeSet(exercise: exercise, weight: weightKg, reps: reps) { sets.append(set) } else { failedRows += 1 }
         }
         return sets.isEmpty ? nil : StrongImportResult(workouts: [ImportedWorkout(title: title, date: date, sets: sets)], skippedRows: 0, failedRows: failedRows)
@@ -319,7 +321,7 @@ enum StrongImportParser {
         guard let rawWeight = parts.first, let weight = Double(rawWeight), weight.isFinite else { return nil }
         let unit = parts.count == 2 ? parts[1].lowercased() : (header.contains("lb") ? "lb" : "kg")
         guard unit == "kg" || unit == "kgs" || unit == "kilogram" || unit == "kilograms" || unit == "lb" || unit == "lbs" || unit == "pound" || unit == "pounds" else { return nil }
-        let kilograms = unit.hasPrefix("lb") || unit.hasPrefix("pound") ? weight * 0.453_592_37 : weight
+        let kilograms = unit.hasPrefix("lb") || unit.hasPrefix("pound") ? WeightUnit.pounds.toKilograms(weight) : weight
         return kilograms >= 0 ? kilograms : nil
     }
 
@@ -389,7 +391,7 @@ private extension Dictionary where Key == String, Value == Any {
         guard weight.isFinite else { return nil }
         let normalized = unit.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard normalized == "kg" || normalized == "kgs" || normalized == "kilogram" || normalized == "kilograms" || normalized == "lb" || normalized == "lbs" || normalized == "pound" || normalized == "pounds" else { return nil }
-        let kilograms = normalized.hasPrefix("lb") || normalized.hasPrefix("pound") ? weight * 0.453_592_37 : weight
+        let kilograms = normalized.hasPrefix("lb") || normalized.hasPrefix("pound") ? WeightUnit.pounds.toKilograms(weight) : weight
         return kilograms >= 0 ? kilograms : nil
     }
 }

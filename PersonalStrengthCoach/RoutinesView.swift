@@ -105,6 +105,9 @@ struct RoutinesListView: View {
 struct RoutineEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let routine: Routine?
 
     @State private var name = ""
@@ -130,7 +133,7 @@ struct RoutineEditorView: View {
                         .listRowBackground(Color.clear)
                 }
                 ForEach($exercises) { $exercise in
-                    RoutineExerciseEditorRow(exercise: $exercise)
+                    RoutineExerciseEditorRow(exercise: $exercise, weightUnit: weightUnit)
                 }
                 .onMove(perform: moveExercises)
                 .onDelete(perform: deleteExercises)
@@ -257,6 +260,7 @@ struct RoutineEditorView: View {
 
 private struct RoutineExerciseEditorRow: View {
     @Binding var exercise: DraftRoutineExercise
+    let weightUnit: WeightUnit
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -274,15 +278,15 @@ private struct RoutineExerciseEditorRow: View {
                 HStack {
                     Text("Weight")
                     Spacer()
-                    TextField("kg", value: Binding(
-                        get: { exercise.targetWeight ?? 0 },
-                        set: { exercise.targetWeight = max(0, $0) }
+                    TextField(weightUnit.symbol, value: Binding(
+                        get: { weightUnit.fromKilograms(exercise.targetWeight ?? 0) },
+                        set: { exercise.targetWeight = max(0, weightUnit.toKilograms($0)) }
                     ), format: .number.precision(.fractionLength(1)))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 120)
-                    Text("kg").foregroundStyle(.secondary)
+                    Text(weightUnit.symbol).foregroundStyle(.secondary)
                 }
             }
         }

@@ -97,12 +97,15 @@ struct HomeView: View {
 
 struct DashboardView: View {
     let workouts: [Workout]; let recoveryDays: [DailyRecovery]
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     var body: some View {
         let strengthTrend = PerformanceEngine.strengthTrend(in: workouts)
         NavigationStack { ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Dashboard").font(.largeTitle.bold())
-                HStack { MetricCard(title: "Weekly Volume", value: "\(Int(PerformanceEngine.weeklyVolume(workouts) / 1_000))k", unit: "kg", icon: "dumbbell.fill", tint: .orange); MetricCard(title: "Workouts", value: "\(workouts.filter { $0.date > .now.addingTimeInterval(-604800) }.count)", unit: "this week", icon: "calendar", tint: .mint) }
+                let weeklyVolume = PerformanceEngine.weeklyVolume(workouts)
+                HStack { MetricCard(title: "Weekly Volume", value: weightUnit.formattedThousands(weeklyVolume) + "k", unit: weightUnit.symbol, icon: "dumbbell.fill", tint: .orange); MetricCard(title: "Workouts", value: "\(workouts.filter { $0.date > .now.addingTimeInterval(-604800) }.count)", unit: "this week", icon: "calendar", tint: .mint) }
                 if let strengthTrend {
                     TrendChart(title: "Strength trend (\(strengthTrend.exercise) est. 1RM)", points: strengthTrend.points, tint: .mint)
                 } else {
@@ -124,6 +127,8 @@ struct DashboardView: View {
 
 struct WorkoutHistoryView: View {
     @Environment(\.modelContext) private var context
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let workouts: [Workout]
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     @State private var showingLogger = false
@@ -163,7 +168,7 @@ struct WorkoutHistoryView: View {
                 .listRowBackground(Color.clear)
         } else {
         ForEach(workouts) { workout in NavigationLink { WorkoutDetailView(workout: workout, history: workouts) } label: {
-            HStack { Image(systemName: "dumbbell.fill").foregroundStyle(.mint).frame(width: 30); VStack(alignment: .leading) { Text(workout.title).font(.headline); Text(workout.date.formatted(date: .abbreviated, time: .omitted)).foregroundStyle(.secondary) }; Spacer(); VStack(alignment: .trailing) { Text("\(Int(workout.volume).formatted()) kg").font(.subheadline.weight(.semibold)); Text("\(workout.durationMinutes) min").font(.caption).foregroundStyle(.secondary) } }
+            HStack { Image(systemName: "dumbbell.fill").foregroundStyle(.mint).frame(width: 30); VStack(alignment: .leading) { Text(workout.title).font(.headline); Text(workout.date.formatted(date: .abbreviated, time: .omitted)).foregroundStyle(.secondary) }; Spacer(); VStack(alignment: .trailing) { Text(weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0)).font(.subheadline.weight(.semibold)); Text("\(workout.durationMinutes) min").font(.caption).foregroundStyle(.secondary) } }
         } }
         // Swipe arms the confirmation rather than deleting outright — this is
         // unrecoverable and `.onDelete` has no built-in confirmation.
@@ -237,6 +242,8 @@ struct WorkoutHistoryView: View {
 struct WorkoutDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let workout: Workout; let history: [Workout]
     @State private var showingEditor = false
     @State private var showingDeleteConfirmation = false
@@ -248,7 +255,7 @@ struct WorkoutDetailView: View {
             .sorted { $0.name < $1.name }
     }
     var body: some View { List {
-        Section("Session") { LabeledContent("Volume", value: "\(Int(workout.volume).formatted()) kg"); LabeledContent("Duration", value: "\(workout.durationMinutes) min"); LabeledContent("Calories", value: "\(workout.calories) kcal") }
+        Section("Session") { LabeledContent("Volume", value: weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0)); LabeledContent("Duration", value: "\(workout.durationMinutes) min"); LabeledContent("Calories", value: "\(workout.calories) kcal") }
         Section("Exercises") {
             ForEach(groupedExercises, id: \.name) { exercise in
                 ExerciseRow(name: exercise.name, sets: exercise.sets, allSets: history.flatMap(\.sets))
@@ -260,7 +267,7 @@ struct WorkoutDetailView: View {
             if !records.isEmpty {
                 Text("Outstanding effort — achieved PRs in \(records.joined(separator: ", ")). Maintain steady recovery before your next heavy session.")
             } else if workout.volume > 8_000 {
-                Text("High-volume session completed (\(Int(workout.volume).formatted()) kg). Focus on adequate protein intake and sleep tonight.")
+                Text("High-volume session completed (\(weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0))). Focus on adequate protein intake and sleep tonight.")
             } else {
                 Text("Solid training session (\(workout.sets.count) sets). Keep your compounds controlled and preserve clean technique.")
             }
@@ -300,6 +307,8 @@ struct WorkoutDetailView: View {
 }
 
 private struct ExerciseRow: View {
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let name: String
     let sets: [ExerciseSet]
     let allSets: [ExerciseSet]
@@ -321,7 +330,7 @@ private struct ExerciseRow: View {
         } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                Text("\(sets.count) sets · \(Int(volume).formatted()) kg")
+                Text("\(sets.count) sets · \(weightUnit.formattedWithUnit(volume, fractionDigits: 0))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(metadataSummary)

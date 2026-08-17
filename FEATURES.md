@@ -24,7 +24,7 @@ Check this tab each morning to decide what to train. If readiness is low but you
 Performance analytics and training trends over time.
 
 **What you'll see:**
-- **Weekly Volume** — Total kilograms moved across all exercises in the past 7 days.
+- **Weekly Volume** — Total weight moved across all exercises in the past 7 days, displayed in your selected kg/lb unit. Calculations remain canonical kilograms.
 - **Workout Count** — Number of sessions completed this week.
 - **Strength Trend** — Estimated 1RM progression for your most-trained exercise, charted across recent weeks. Requires the same exercise logged in at least two different weeks.
 - **Sleep & HRV Trends** — 7-day rolling charts showing recovery patterns.
@@ -132,7 +132,7 @@ Log training sessions with exercise-by-exercise tracking.
 1. From History tab, tap **+** → **Log workout**.
 2. Set workout name and date/time.
 3. Tap **Add exercise** to choose from the library or create a custom exercise.
-4. For each exercise, log sets with weight (kg), reps, set type, and optional RPE.
+4. For each exercise, log sets with weight in your selected kg/lb unit, reps, set type, and optional RPE. Saved values remain canonical kilograms.
    Set types distinguish warmups, working sets, drop sets, and failure sets. When
    the exercise has prior history, the corresponding sets are prefilled from the
    most recent workout and remain fully editable; prior RPE is never copied.
@@ -148,7 +148,7 @@ Log training sessions with exercise-by-exercise tracking.
 - **Start from Routine** — Load a saved routine to pre-fill exercises and target sets/reps (see below). Routine targets take precedence over previous-workout prefill.
 
 **Tips:**
-- For bodyweight exercises (push-ups, pull-ups), log 0 kg weight.
+- For bodyweight exercises (push-ups, pull-ups), log 0 in your selected unit; it remains canonical zero kilograms in storage.
 - The logger validates that each workout has at least one exercise with one set before saving.
 - Tap the trash icon next to an exercise to remove it from the session.
 
@@ -215,6 +215,7 @@ Migrate your training history from the Strong app.
 Manage your data and privacy.
 
 **What's here:**
+- **Weight unit preference** — Choose kilograms or pounds for weight entry and display throughout the app. Workout calculations, imports, duplicate detection, and JSON exports remain in canonical kilograms.
 - **Export All Data** — Export your complete completed-workout history (workouts, sets, recovery data, custom exercises, routines) as a JSON file. Unfinished workout drafts are intentionally excluded. Use this for backups or to migrate to another device.
 - **Delete All Local Data** — Permanently erase all workouts, unfinished workout drafts and their saved sets, recovery data, custom exercises, and routines. This cannot be undone. Apple Health data is unaffected.
 - **HealthKit Sync** — The app automatically syncs sleep, HRV, resting heart rate, and body mass from Apple Health on every app launch. If sync fails, you'll see a retry prompt.
@@ -256,7 +257,7 @@ Each muscle group's recovery is based on:
 Recovery percentages update in real-time as you log new workouts.
 
 ### Weekly Volume
-Sum of `weight × reps` for all sets logged in the past 7 days. Displayed in kilograms (divided by 1,000 for readability, e.g., "12k kg" means 12,000 kg total).
+Sum of canonical-kilogram `weight × reps` for all sets logged in the past 7 days. It is displayed in your selected kg/lb unit (divided by 1,000 for readability, e.g., "12k kg" means 12,000 kg total).
 
 ### Workout Duration
 Automatically calculated from the time you open the workout logger to the time you tap Save. Editable via the date picker if you log a workout after completing it.

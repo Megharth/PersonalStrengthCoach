@@ -356,10 +356,24 @@ struct DataManagementView: View {
     @State private var showingExporter = false
     @State private var showingDeleteConfirmation = false
     @State private var errorMessage: String?
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+
+    private var weightUnit: WeightUnit {
+        WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Units") {
+                    Picker("Weight unit", selection: $weightUnitRawValue) {
+                        ForEach(WeightUnit.allCases) { unit in
+                            Text(unit.displayName).tag(unit.rawValue)
+                        }
+                    }
+                    Text("Weights are entered and displayed in the selected unit. Saved workouts, calculations, imports, and exports remain in kilograms.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 Section("Your data") {
                     Button { prepareExport() } label: { Label("Export my data", systemImage: "square.and.arrow.up") }
                     Text("Exports workouts, recovery records, custom exercises, and routines as JSON. HealthKit history itself is not changed.")

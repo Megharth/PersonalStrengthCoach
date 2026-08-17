@@ -25,6 +25,8 @@ struct MuscleRecoveryTile: View {
 }
 
 struct ExerciseDetailView: View {
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let exercise: String; let sets: [ExerciseSet]
     var relevant: [ExerciseSet] { sets.filter { $0.normalizedExercise == exercise } }
     private var e1rmPoints: [Double] {
@@ -36,14 +38,14 @@ struct ExerciseDetailView: View {
         }
         let diff = last - first
         if diff > 0 {
-            return "Estimated 1RM is up +\(Int(diff)) kg across \(e1rmPoints.count) recorded workouts. Prioritize small, repeatable progressions."
+            return "Estimated 1RM is up +\(weightUnit.formatted(diff)) \(weightUnit.symbol) across \(e1rmPoints.count) recorded workouts. Prioritize small, repeatable progressions."
         } else if diff < 0 {
-            return "Estimated 1RM has dropped \(Int(abs(diff))) kg recently. Check recovery and fatigue management."
+            return "Estimated 1RM has dropped \(weightUnit.formatted(abs(diff))) \(weightUnit.symbol) recently. Check recovery and fatigue management."
         } else {
-            return "Estimated 1RM is holding steady at \(Int(last)) kg. Maintain baseline effort or try small progressive overload adjustments."
+            return "Estimated 1RM is holding steady at \(weightUnit.formatted(last)) \(weightUnit.symbol). Maintain baseline effort or try small progressive overload adjustments."
         }
     }
-    var body: some View { ScrollView { VStack(alignment: .leading, spacing: 18) { Text(exercise).font(.largeTitle.bold()); HStack { MetricCard(title: "Est. 1RM", value: "\(Int(PerformanceEngine.estimated1RM(for: exercise, sets: sets)))", unit: "kg", icon: "bolt.fill", tint: .orange); MetricCard(title: "Best set", value: relevant.map { Int($0.weight) }.max().map(String.init) ?? "—", unit: "kg", icon: "trophy.fill", tint: .yellow) }; TrendChart(title: "Estimated 1RM", points: e1rmPoints, tint: .mint); CoachCard(title: "Progression", detail: progressionDetail, icon: "sparkles") }.padding() }.background(Color(uiColor: .systemGroupedBackground)).navigationBarTitleDisplayMode(.inline) }
+    var body: some View { ScrollView { VStack(alignment: .leading, spacing: 18) { Text(exercise).font(.largeTitle.bold()); HStack { MetricCard(title: "Est. 1RM", value: weightUnit.formatted(PerformanceEngine.estimated1RM(for: exercise, sets: sets)), unit: weightUnit.symbol, icon: "bolt.fill", tint: .orange); MetricCard(title: "Best set", value: relevant.map(\.weight).max().map { weightUnit.formatted($0) } ?? "—", unit: weightUnit.symbol, icon: "trophy.fill", tint: .yellow) }; TrendChart(title: "Estimated 1RM", points: e1rmPoints.map { weightUnit.fromKilograms($0) }, tint: .mint); CoachCard(title: "Progression", detail: progressionDetail, icon: "sparkles") }.padding() }.background(Color(uiColor: .systemGroupedBackground)).navigationBarTitleDisplayMode(.inline) }
 }
 
 struct CoachView: View {

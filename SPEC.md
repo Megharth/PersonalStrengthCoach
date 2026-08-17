@@ -4,8 +4,8 @@
 
 ## Current focus
 
-**Next explicitly sequenced item:** P1 Logging experience, item 6 — **Plate
-calculator and unit preference (kg/lb) app-wide**.
+**Next explicitly sequenced item:** P1 Analytics — **Per-exercise progress
+screen** (remaining chart, rep-max, confidence, and PR-timeline work).
 
 **Other open queues:** P1 Analytics (progress-screen completion, weekly volume
 per muscle, and PR history) and P1 Platform Integration (widgets, notifications,
@@ -129,7 +129,7 @@ XCTests.
      2026-08-15; scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
    **Shipped 2026-08-16** — optional canonical RPE (0–10, half-point increments), derived RIR, set-type controls, warmup exclusion from volume/e1RM/PR analytics, draft/edit/import/export support, and V4→V5 migration compatibility. Unlocks autoregulation and cleaner volume math (exclude warmups).
-6. **Plate calculator** and **unit preference** (kg/lb) app-wide.
+6. **Unit preference** (kg/lb) app-wide. **Shipped 2026-08-16** — added app-wide kg/lb entry and presentation with canonical kilogram persistence, selected-unit import previews, and focused conversion tests. Users enter the exact total weight used for each set; no plate-loading assumptions are made.
 
 ### P1 — Analytics
 - [ ] **Per-exercise progress screen** *(partially implemented)*. Current screen
@@ -219,7 +219,7 @@ were modified._
 **Logging flow enhancements (biggest value-add)**
 - **Previous-set reference** in `ExerciseLoggerCard`: fetch the most recent set(s) for that `normalizedExercise` and show "last: 60kg × 8" as secondary text.
 - **Rest timer**: in-sheet countdown after a set is marked complete, optionally promoted to an ActivityKit Live Activity/Dynamic Island — the single most "app feels alive" addition, but larger effort.
-- **Plate math**: a pure `PlateMathEngine` (bar + plate set → per-side plates) fits the existing stateless-engine architecture; surface inline next to the weight field.
+- **Weight entry**: users enter the exact total weight used for each set; bar and plate configurations vary by gym, so the app makes no plate-loading assumptions.
 - Default new sets to blank/nil display rather than `weight: 0, reps: 8`.
 
 **Haptics & motion (quick, native, low-risk)**
@@ -256,7 +256,7 @@ were modified._
 
 **Larger efforts (separate spec items)**
 - Live in-workout rest timer with ActivityKit Live Activity/Dynamic Island.
-- Plate math engine + UI (+ bar-weight/unit setting).
+- Plate-loading guidance is intentionally out of scope; users enter the exact total weight used for each set because bar and plate configurations vary by gym.
 - Home Screen widget (WidgetKit) for today's readiness.
 - Superset/circuit logging (schema change via `AppSchemaV1`/`AppMigrationPlan`).
 

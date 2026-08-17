@@ -125,7 +125,10 @@ struct WorkoutLoggerView: View {
     @State private var restEndsAt: Date?
     @State private var now = Date.now
     @State private var showingDiscardConfirmation = false
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
+
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
 
     // Explicit init so `WorkoutLoggerView()` still resolves once `workout` is a
     // stored non-defaulted property: adding it removes the synthesized default init,
@@ -164,7 +167,8 @@ struct WorkoutLoggerView: View {
                             for: exercise.name,
                             in: allWorkouts,
                             excluding: workout
-                        )
+                        ),
+                        weightUnit: weightUnit
                     ) {
                         exercises.removeAll { $0.id == exercise.id }
                     } startRest: {
@@ -181,7 +185,7 @@ struct WorkoutLoggerView: View {
 
                 if !isEditing {
                     Section("Session") {
-                        LabeledContent("Volume so far", value: "\(Int(WorkoutInProgressEngine.volume(of: exercises)).formatted()) kg")
+                        LabeledContent("Volume so far", value: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))
                         LabeledContent("Elapsed", value: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
                         if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
                             LabeledContent("Rest timer", value: "\(remaining / 60):\(String(format: "%02d", remaining % 60))")
@@ -437,12 +441,13 @@ struct WorkoutLoggerView: View {
 private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
     let previous: PreviousSetPerformance?
+    let weightUnit: WeightUnit
     let remove: () -> Void
     let startRest: () -> Void
 
     private var previousSummary: String? {
         guard let previous else { return nil }
-        let sets = previous.sets.map { "\(Self.formatWeight($0.weight)) × \($0.reps)" }.joined(separator: ", ")
+        let sets = previous.sets.map { "\(Self.formatWeight($0.weight, unit: weightUnit)) \(weightUnit.symbol) × \($0.reps)" }.joined(separator: ", ")
         let age = RelativeDateTimeFormatter().localizedString(for: previous.date, relativeTo: .now)
         return "Last: \(sets) · \(age)"
     }
@@ -451,8 +456,8 @@ private struct ExerciseLoggerCard: View {
         previous?.isStale == true ? Color.secondary.opacity(0.55) : Color.secondary
     }
 
-    static func formatWeight(_ weight: Double) -> String {
-        weight.rounded() == weight ? String(Int(weight)) : String(format: "%.1f", weight)
+    static func formatWeight(_ weight: Double, unit: WeightUnit) -> String {
+        unit.formatted(weight)
     }
 
     var body: some View {
@@ -462,7 +467,10 @@ private struct ExerciseLoggerCard: View {
                 HStack {
                     Text("\(index + 1)")
                         .font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 18)
-                    NumericFieldDouble(value: $set.weight, title: "kg")
+                    NumericFieldDouble(value: Binding(
+                        get: { weightUnit.fromKilograms(set.weight) },
+                        set: { set.weight = max(0, weightUnit.toKilograms($0)) }
+                    ), title: weightUnit.symbol)
                     NumericFieldInt(value: $set.reps, title: "reps")
                     Picker("Set type", selection: $set.setType) {
                         ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
@@ -477,7 +485,7 @@ private struct ExerciseLoggerCard: View {
                         .textFieldStyle(.roundedBorder)
                         .accessibilityLabel("Optional RPE")
                     if let previousSet = previous?.sets[safe: index] {
-                        Text("\(Self.formatWeight(previousSet.weight)) × \(previousSet.reps)")
+                        Text("\(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol) × \(previousSet.reps)")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)

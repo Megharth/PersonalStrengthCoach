@@ -2,6 +2,48 @@ import Foundation
 
 enum ReadinessConfidence { case low, medium, high }
 
+enum WeightUnit: String, CaseIterable, Codable, Identifiable {
+    case kilograms = "kg"
+    case pounds = "lb"
+
+    static let defaultUnit = WeightUnit.kilograms
+    static let poundsToKilograms = 0.453_592_37
+
+    var id: String { rawValue }
+    var symbol: String { rawValue }
+    var displayName: String { self == .kilograms ? "Kilograms" : "Pounds" }
+
+    func toKilograms(_ value: Double) -> Double {
+        self == .kilograms ? value : value * Self.poundsToKilograms
+    }
+
+    func fromKilograms(_ value: Double) -> Double {
+        self == .kilograms ? value : value / Self.poundsToKilograms
+    }
+
+    func formatted(_ kilograms: Double, fractionDigits: Int = 1) -> String {
+        guard kilograms.isFinite else { return "—" }
+        let value = fromKilograms(kilograms)
+        let rendered = String(format: "%.*f", fractionDigits, value)
+        return rendered.trimmingTrailingZeros()
+    }
+
+    func formattedWithUnit(_ kilograms: Double, fractionDigits: Int = 1) -> String {
+        "\(formatted(kilograms, fractionDigits: fractionDigits)) \(symbol)"
+    }
+
+    func formattedThousands(_ kilograms: Double, fractionDigits: Int = 0) -> String {
+        guard kilograms.isFinite else { return "—" }
+        return formatted(fromKilograms(kilograms) / 1_000, fractionDigits: fractionDigits)
+    }
+}
+
+private extension String {
+    func trimmingTrailingZeros() -> String {
+        replacingOccurrences(of: "\\.?0+$", with: "", options: .regularExpression)
+    }
+}
+
 enum RPEEngine {
     static func validated(_ value: Double?) -> Double? {
         guard let value, value.isFinite, value >= 0, value <= 10 else { return nil }
