@@ -28,7 +28,13 @@ xcodebuild -project PersonalStrengthCoach.xcodeproj -scheme PersonalStrengthCoac
 xcodebuild -project PersonalStrengthCoach.xcodeproj -scheme PersonalStrengthCoach \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
   -only-testing:PersonalStrengthCoachTests/StrongImportParserTests/testMethodName test
+
+# Run the automated UI suite (override DESTINATION or pass -only-testing as needed)
+Scripts/run-ui-tests.sh
+Scripts/run-ui-tests.sh -only-testing:PersonalStrengthCoachUITests/NavigationUITests
 ```
+
+UI tests launch the app with `-ui-testing` and an optional `-ui-test-scenario` (`empty`, `history`, or `recovery`). They use an in-memory SwiftData store and fixed fixtures, and bypass HealthKit synchronization so runs do not require permissions, network access, or manual simulator interaction. Results are written to `.build/ui-tests.xcresult` by default.
 
 There is no linter/formatter configured; follow Xcode's warnings and the conventions below.
 

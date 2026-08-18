@@ -12,23 +12,39 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
-            DashboardView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Dashboard", systemImage: "chart.xyaxis.line") }.tag(1)
-            WorkoutHistoryView(workouts: workouts).tabItem { Label("History", systemImage: "clock.arrow.circlepath") }.tag(2)
-            RecoveryView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Recovery", systemImage: "heart.fill") }.tag(3)
-            CoachView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Coach", systemImage: "sparkles") }.tag(4)
-            DataManagementView().tabItem { Label("Settings", systemImage: "gearshape.fill") }.tag(5)
+            HomeView(workouts: workouts, recoveryDays: recoveryDays)
+                .tabItem { Label("Today", systemImage: "house.fill").accessibilityIdentifier("tab.today") }
+                .tag(0)
+            DashboardView(workouts: workouts, recoveryDays: recoveryDays)
+                .tabItem { Label("Dashboard", systemImage: "chart.xyaxis.line").accessibilityIdentifier("tab.dashboard") }
+                .tag(1)
+            WorkoutHistoryView(workouts: workouts)
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath").accessibilityIdentifier("tab.history") }
+                .tag(2)
+            RecoveryView(workouts: workouts, recoveryDays: recoveryDays)
+                .tabItem { Label("Recovery", systemImage: "heart.fill").accessibilityIdentifier("tab.recovery") }
+                .tag(3)
+            CoachView(workouts: workouts, recoveryDays: recoveryDays)
+                .tabItem { Label("Coach", systemImage: "sparkles").accessibilityIdentifier("tab.coach") }
+                .tag(4)
+            DataManagementView()
+                .tabItem { Label("Settings", systemImage: "gearshape.fill").accessibilityIdentifier("tab.settings") }
+                .tag(5)
         }
         .tint(.mint)
         .task {
-            #if DEBUG
-            #if targetEnvironment(simulator)
-            SeedData.loadIfNeeded(context: context, workouts: workouts)
-            #endif
-            #endif
-            #if !targetEnvironment(simulator)
-            await syncHealthKit()
-            #endif
+            if AppTestConfiguration.isUITesting {
+                SeedData.loadUITestScenario(AppTestConfiguration.scenario, context: context)
+            } else {
+                #if DEBUG
+                #if targetEnvironment(simulator)
+                SeedData.loadIfNeeded(context: context, workouts: workouts)
+                #endif
+                #endif
+                #if !targetEnvironment(simulator)
+                await syncHealthKit()
+                #endif
+            }
         }
         .alert(healthKitAlert?.title ?? "Health data", isPresented: Binding(get: { healthKitAlert != nil }, set: { if !$0 { healthKitAlert = nil } })) {
             Button("Retry") { Task { await syncHealthKit() } }
@@ -182,6 +198,7 @@ struct WorkoutHistoryView: View {
         }
         }
         .navigationTitle("Workout History")
+        .accessibilityIdentifier("screen.workoutHistory")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -189,6 +206,7 @@ struct WorkoutHistoryView: View {
                     NavigationLink { RoutinesListView() } label: { Label("Routines", systemImage: "list.bullet.rectangle") }
                     NavigationLink { StrongImportView() } label: { Label("Import from Strong", systemImage: "square.and.arrow.down") }
                 } label: { Image(systemName: "plus") }
+                .accessibilityIdentifier("workoutHistory.addMenu")
             }
         }
         .sheet(isPresented: $showingLogger) { WorkoutLoggerView() }

@@ -1,0 +1,51 @@
+{
+  "configurations" : [
+    {
+      "name" : "All Tests",
+      "options" : {
+        "commandLineArgumentEntries" : [
+          {
+            "argument" : "-ui-testing",
+            "enabled" : true
+          }
+        ]
+      },
+      "testTargets" : [
+        {
+          "target" : {
+            "containerPath" : "container:PersonalStrengthCoach.xcodeproj",
+            "identifier" : "A1B2C3D4E5F6000000000019",
+            "name" : "PersonalStrengthCoachTests"
+          }
+        },
+        {
+          "target" : {
+            "containerPath" : "container:PersonalStrengthCoach.xcodeproj",
+            "identifier" : "A1B2C3D4E5F6000000000034",
+            "name" : "PersonalStrengthCoachUITests"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultOptions" : {
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:PersonalStrengthCoach.xcodeproj",
+        "identifier" : "A1B2C3D4E5F6000000000019",
+        "name" : "PersonalStrengthCoachTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:PersonalStrengthCoach.xcodeproj",
+        "identifier" : "A1B2C3D4E5F6000000000034",
+        "name" : "PersonalStrengthCoachUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

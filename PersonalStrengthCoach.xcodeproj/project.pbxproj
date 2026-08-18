@@ -6,6 +6,13 @@
 	objectVersion = 71;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A1B2C3D4E5F6000000000041 /* E2ETestBase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000000000043 /* E2ETestBase.swift */; };
+		A1B2C3D4E5F6000000000042 /* NavigationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000000000044 /* NavigationUITests.swift */; };
+		A1B2C3D4E5F6000000000046 /* WorkoutFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6000000000047 /* WorkoutFlowUITests.swift */; };
+		A1B2C3D4E5F6000000000049 /* RoutinesImportSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000004A /* RoutinesImportSettingsUITests.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A1B2C3D4E5F6000000000026 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -19,6 +26,11 @@
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F6000000000001 /* PersonalStrengthCoach.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PersonalStrengthCoach.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PersonalStrengthCoachTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6000000000031 /* PersonalStrengthCoachUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PersonalStrengthCoachUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6000000000043 /* E2ETestBase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = E2ETestBase.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6000000000044 /* NavigationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationUITests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6000000000047 /* WorkoutFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutFlowUITests.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F600000000004A /* RoutinesImportSettingsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutinesImportSettingsUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -34,6 +46,7 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1B2C3D4E5F6000000000002 /* PersonalStrengthCoach */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (A1B2C3D4E5F6000000000016 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = PersonalStrengthCoach; sourceTree = "<group>"; };
 		A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PersonalStrengthCoachTests; sourceTree = "<group>"; };
+		A1B2C3D4E5F6000000000032 /* PersonalStrengthCoachUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = PersonalStrengthCoachUITests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +64,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F6000000000033 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -59,6 +79,8 @@
 			children = (
 				A1B2C3D4E5F6000000000002 /* PersonalStrengthCoach */,
 				A1B2C3D4E5F6000000000018 /* PersonalStrengthCoachTests */,
+				A1B2C3D4E5F6000000000032 /* PersonalStrengthCoachUITests */,
+				A1B2C3D4E5F6000000000045 /* PersonalStrengthCoachUITests */,
 				A1B2C3D4E5F6000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,8 +90,20 @@
 			children = (
 				A1B2C3D4E5F6000000000001 /* PersonalStrengthCoach.app */,
 				A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */,
+				A1B2C3D4E5F6000000000031 /* PersonalStrengthCoachUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A1B2C3D4E5F6000000000045 /* PersonalStrengthCoachUITests */ = {
+			isa = PBXGroup;
+			children = (
+				A1B2C3D4E5F6000000000043 /* E2ETestBase.swift */,
+				A1B2C3D4E5F6000000000044 /* NavigationUITests.swift */,
+				A1B2C3D4E5F6000000000047 /* WorkoutFlowUITests.swift */,
+				A1B2C3D4E5F600000000004A /* RoutinesImportSettingsUITests.swift */,
+			);
+			path = PersonalStrengthCoachUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -116,6 +150,24 @@
 			productReference = A1B2C3D4E5F6000000000017 /* PersonalStrengthCoachTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A1B2C3D4E5F6000000000034 /* PersonalStrengthCoachUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3D4E5F600000000003A /* Build configuration list for PBXNativeTarget "PersonalStrengthCoachUITests" */;
+			buildPhases = (
+				A1B2C3D4E5F6000000000035 /* Sources */,
+				A1B2C3D4E5F6000000000033 /* Frameworks */,
+				A1B2C3D4E5F6000000000036 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3D4E5F6000000000039 /* PBXTargetDependency */,
+			);
+			name = PersonalStrengthCoachUITests;
+			productName = PersonalStrengthCoachUITests;
+			productReference = A1B2C3D4E5F6000000000031 /* PersonalStrengthCoachUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -147,6 +199,7 @@
 			targets = (
 				A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */,
 				A1B2C3D4E5F6000000000019 /* PersonalStrengthCoachTests */,
+				A1B2C3D4E5F6000000000034 /* PersonalStrengthCoachUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -160,6 +213,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A1B2C3D4E5F6000000000023 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3D4E5F6000000000036 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -183,10 +243,26 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3D4E5F6000000000035 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D4E5F6000000000041 /* E2ETestBase.swift in Sources */,
+				A1B2C3D4E5F6000000000042 /* NavigationUITests.swift in Sources */,
+				A1B2C3D4E5F6000000000046 /* WorkoutFlowUITests.swift in Sources */,
+				A1B2C3D4E5F6000000000049 /* RoutinesImportSettingsUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		A1B2C3D4E5F6000000000027 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */;
+			targetProxy = A1B2C3D4E5F6000000000026 /* PBXContainerItemProxy */;
+		};
+		A1B2C3D4E5F6000000000039 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = A1B2C3D4E5F6000000000005 /* PersonalStrengthCoach */;
 			targetProxy = A1B2C3D4E5F6000000000026 /* PBXContainerItemProxy */;
@@ -279,6 +355,34 @@
 			};
 			name = Release;
 		};
+		A1B2C3D4E5F6000000000037 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalstrengthcoach.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PersonalStrengthCoach;
+			};
+			name = Debug;
+		};
+		A1B2C3D4E5F6000000000038 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalstrengthcoach.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = PersonalStrengthCoach;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -305,6 +409,15 @@
 			buildConfigurations = (
 				A1B2C3D4E5F6000000000024 /* Debug */,
 				A1B2C3D4E5F6000000000025 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3D4E5F600000000003A /* Build configuration list for PBXNativeTarget "PersonalStrengthCoachUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3D4E5F6000000000037 /* Debug */,
+				A1B2C3D4E5F6000000000038 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

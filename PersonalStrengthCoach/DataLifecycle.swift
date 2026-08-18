@@ -386,6 +386,7 @@ struct DataManagementView: View {
                 }
             }
             .navigationTitle("Settings")
+            .accessibilityIdentifier("screen.settings")
             .confirmationDialog("Delete all local data?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete everything", role: .destructive) { deleteAllData() }
                 Button("Cancel", role: .cancel) { }

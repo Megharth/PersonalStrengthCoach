@@ -239,13 +239,16 @@ struct WorkoutLoggerView: View {
     private var workoutInfoSection: some View {
         Section("Workout") {
             TextField("Workout name", text: $title)
+                .accessibilityIdentifier("workout.title")
             DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+                .accessibilityIdentifier("workout.date")
             if isEditing {
                 Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
             } else {
                 Button { showingRoutinePicker = true } label: {
                     Label("Start from a routine", systemImage: "list.bullet.rectangle")
                 }
+                .accessibilityIdentifier("workout.startRoutine")
             }
         }
     }
@@ -269,6 +272,7 @@ struct WorkoutLoggerView: View {
                 Label("Add exercise", systemImage: "plus.circle.fill")
                     .fontWeight(.semibold)
             }
+            .accessibilityIdentifier("workout.addExercise")
         }
     }
 
@@ -286,10 +290,12 @@ struct WorkoutLoggerView: View {
     private var workoutToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button(isEditing ? "Cancel" : "Discard", action: handleCancel)
+                .accessibilityIdentifier("workout.cancel")
         }
         ToolbarItem(placement: .confirmationAction) {
             Button("Save", action: handleSave)
                 .fontWeight(.semibold)
+                .accessibilityIdentifier("workout.save")
         }
     }
 
@@ -301,6 +307,7 @@ struct WorkoutLoggerView: View {
                 }
             }
             .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")
+            .accessibilityIdentifier(isEditing ? "screen.editWorkout" : "screen.logWorkout")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: loadDraftIfNeeded)
             .onChange(of: scenePhase) { _, phase in
@@ -1037,6 +1044,7 @@ struct ExercisePicker: View {
             }
             .searchable(text: $search, prompt: "Search exercises")
             .navigationTitle("Add Exercise")
+            .accessibilityIdentifier("screen.exercisePicker")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) { Button { showingCreator = true } label: { Label("New Exercise", systemImage: "plus") } }

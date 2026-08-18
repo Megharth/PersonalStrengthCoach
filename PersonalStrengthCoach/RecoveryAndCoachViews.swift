@@ -15,7 +15,7 @@ struct RecoveryView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) { ForEach(MuscleGroup.allCases) { muscle in let value = RecoveryEngine.muscleRecovery(muscle, workouts: workouts); MuscleRecoveryTile(muscle: muscle, value: value) } }
         Text("Weekly averages").font(.title3.bold()).padding(.top, 4)
         HStack { MetricCard(title: "Sleep", value: String(format: "%.1f", averageSleep), unit: "hours", icon: "bed.double.fill", tint: .indigo); MetricCard(title: "HRV", value: "\(Int(averageHRV))", unit: "ms", icon: "waveform.path.ecg", tint: .pink) }
-    }.padding() }.background(Color(uiColor: .systemGroupedBackground)) } }
+    }.padding() }.background(Color(uiColor: .systemGroupedBackground)).accessibilityIdentifier("screen.recovery") } }
 }
 
 struct MuscleRecoveryTile: View {

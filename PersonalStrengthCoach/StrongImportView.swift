@@ -52,8 +52,12 @@ struct StrongImportView: View {
                 } description: {
                     Text("Choose a Strong CSV or JSON export, or paste the export contents.")
                 } actions: {
-                    Button("Choose file") { showingFilePicker = true }.buttonStyle(.borderedProminent)
-                    Button("Paste export") { showingPaste = true }.padding(.top, 4)
+                    Button("Choose file") { showingFilePicker = true }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("import.chooseFile")
+                    Button("Paste export") { showingPaste = true }
+                        .padding(.top, 4)
+                        .accessibilityIdentifier("import.pasteExport")
                 }
             } else {
                 List {
@@ -72,9 +76,14 @@ struct StrongImportView: View {
             }
         }
         .navigationTitle("Import from Strong")
+        .accessibilityIdentifier("screen.strongImport")
         .toolbar {
             if !imports.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) { Button("Import") { save() }.fontWeight(.semibold) }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Import") { save() }
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("import.save")
+                }
             }
         }
         .fileImporter(isPresented: $showingFilePicker, allowedContentTypes: [.commaSeparatedText, .json, .plainText]) { result in
@@ -158,6 +167,7 @@ private struct PasteImportView: View {
         NavigationStack {
             TextEditor(text: $text).font(.system(.body, design: .monospaced)).padding(8)
                 .navigationTitle("Paste Strong Export")
+        .accessibilityIdentifier("screen.pasteImport")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) { Button("Preview") { submit(text); dismiss() }.disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }

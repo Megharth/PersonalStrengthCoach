@@ -7,7 +7,7 @@ struct PersonalStrengthCoachApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Schema(AppSchemaV5.models), migrationPlan: AppMigrationPlan.self)
+            container = try AppTestConfiguration.makeContainer()
         } catch {
             fatalError("Could not create the data store: \(error)")
         }

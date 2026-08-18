@@ -76,9 +76,11 @@ struct RoutinesListView: View {
             }
         }
         .navigationTitle("Routines")
+        .accessibilityIdentifier("screen.routines")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showingCreator = true } label: { Label("New Routine", systemImage: "plus") }
+                    .accessibilityIdentifier("routines.new")
             }
         }
         .sheet(isPresented: $showingCreator) {
@@ -151,10 +153,16 @@ struct RoutineEditorView: View {
             }
         }
         .navigationTitle(isEditing ? "Edit Routine" : "New Routine")
+        .accessibilityIdentifier(isEditing ? "screen.editRoutine" : "screen.newRoutine")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold).disabled(trimmedName.isEmpty) }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { save() }
+                    .fontWeight(.semibold)
+                    .disabled(trimmedName.isEmpty)
+                    .accessibilityIdentifier("routine.save")
+            }
             ToolbarItem(placement: .topBarTrailing) { EditButton().disabled(exercises.count < 2) }
         }
         .onAppear(perform: loadDraftIfNeeded)

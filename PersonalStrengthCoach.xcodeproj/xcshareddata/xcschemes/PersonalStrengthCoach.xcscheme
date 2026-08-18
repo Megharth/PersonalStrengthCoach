@@ -28,7 +28,13 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      shouldAutocreateTestPlan = "NO">
+      <TestPlans>
+         <TestPlanReference
+            reference = "container:PersonalStrengthCoach.xctestplan"
+            default = "YES">
+         </TestPlanReference>
+      </TestPlans>
       <Testables>
          <TestableReference
             skipped = "NO">
@@ -37,6 +43,16 @@
                BlueprintIdentifier = "A1B2C3D4E5F6000000000019"
                BuildableName = "PersonalStrengthCoachTests.xctest"
                BlueprintName = "PersonalStrengthCoachTests"
+               ReferencedContainer = "container:PersonalStrengthCoach.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A1B2C3D4E5F6000000000034"
+               BuildableName = "PersonalStrengthCoachUITests.xctest"
+               BlueprintName = "PersonalStrengthCoachUITests"
                ReferencedContainer = "container:PersonalStrengthCoach.xcodeproj">
             </BuildableReference>
          </TestableReference>
