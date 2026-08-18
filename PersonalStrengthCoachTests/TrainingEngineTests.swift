@@ -2,6 +2,13 @@ import XCTest
 @testable import PersonalStrengthCoach
 
 final class TrainingEngineTests: XCTestCase {
+    func testRepsValidationClampsToMinimumAndMaximum() {
+        XCTAssertEqual(RepsEngine.validated(-1), 1)
+        XCTAssertEqual(RepsEngine.validated(0), 1)
+        XCTAssertEqual(RepsEngine.validated(8), 8)
+        XCTAssertEqual(RepsEngine.validated(1_000), 999)
+    }
+
     func testRPEValidationAndRIRConversion() {
         XCTAssertNil(RPEEngine.validated(nil))
         XCTAssertNil(RPEEngine.validated(-0.5))

@@ -67,6 +67,12 @@ struct ReadinessResult {
     let confidence: ReadinessConfidence
 }
 
+enum RepsEngine {
+    static func validated(_ reps: Int) -> Int {
+        min(999, max(1, reps))
+    }
+}
+
 enum RecoveryEngine {
     static func readiness(today: DailyRecovery?, recent: [DailyRecovery], workouts: [Workout], now: Date = .now) -> ReadinessResult {
         guard let today else { return ReadinessResult(score: 50, color: "Yellow", factors: ["Connect Apple Health to calculate readiness."], confidence: .low) }
@@ -316,6 +322,11 @@ enum WorkoutInProgressEngine {
     static func remainingRestSeconds(endsAt: Date?, now: Date) -> Int? {
         guard let endsAt else { return nil }
         return max(0, Int(ceil(endsAt.timeIntervalSince(now))))
+    }
+
+    static func restJustCompleted(endsAt: Date?, previousNow: Date, now: Date) -> Bool {
+        guard let endsAt else { return false }
+        return previousNow < endsAt && now >= endsAt
     }
 
     /// Treat unfinished workout state as a singleton. The newest update wins;

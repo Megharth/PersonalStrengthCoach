@@ -74,6 +74,13 @@ extension LoggedExercise {
 
 /// Pure helpers for editing a logged workout, factored out of `WorkoutLoggerView`
 /// so the set-diff and prefill logic can be unit-tested without a `ModelContext`.
+private struct DeletedSetRecovery: Identifiable {
+    let id = UUID()
+    let exerciseID: UUID
+    let set: EditableSet
+    let index: Int
+}
+
 enum WorkoutEditorLogic {
     static func removedSetIDs(original: Set<ObjectIdentifier>, remaining: Set<ObjectIdentifier>) -> Set<ObjectIdentifier> {
         original.subtracting(remaining)
@@ -121,7 +128,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
-    let workout: Workout?          // nil == log a new workout
+    let workout: Workout?
     @State private var title = "Workout"
     @State private var date = Date.now
     @State private var sessionStart = Date.now
@@ -133,126 +140,219 @@ struct WorkoutLoggerView: View {
     @State private var routinePendingReplacement: Routine?
     @State private var showingRoutineReplacementConfirmation = false
     @State private var showingEmptyAlert = false
+    @State private var showingInvalidRPEAlert = false
+    @State private var showingInvalidRepsAlert = false
     @State private var saveError: String?
     @State private var restEndsAt: Date?
     @State private var now = Date.now
+    @State private var previousRestTick = Date.now
+    @State private var restCompletionPulse = false
     @State private var showingDiscardConfirmation = false
+    @State private var exercisePendingRemoval: LoggedExercise?
+    @State private var showingExerciseRemovalConfirmation = false
+    @State private var deletedSetRecovery: DeletedSetRecovery?
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
 
-    // Explicit init so `WorkoutLoggerView()` still resolves once `workout` is a
-    // stored non-defaulted property: adding it removes the synthesized default init,
-    // and the memberwise one is private (the `@State` are), so it can't be seen
-    // from `RootView`.
+    private var previousPerformances: [String: PreviousSetPerformance] {
+        Dictionary(uniqueKeysWithValues: Set(exercises.map(\.name)).compactMap { name in
+            guard let performance = PreviousSetEngine.mostRecentPerformance(
+                for: name,
+                in: allWorkouts,
+                excluding: workout
+            ) else { return nil }
+            return (name, performance)
+        })
+    }
+
     init(workout: Workout? = nil) {
         self.workout = workout
     }
 
     private var isEditing: Bool { workout != nil }
 
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Workout") {
-                    TextField("Workout name", text: $title)
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    if isEditing {
-                        Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
-                    } else {
-                        Button { showingRoutinePicker = true } label: {
-                            Label("Start from a routine", systemImage: "list.bullet.rectangle")
-                        }
-                    }
-                }
+    private var hasInvalidRPE: Bool {
+        exercises.contains { exercise in
+            exercise.sets.contains { set in
+                guard let rpe = set.rpe else { return false }
+                return !rpe.isFinite || !(0...10).contains(rpe)
+            }
+        }
+    }
 
-                if exercises.isEmpty {
-                    ContentUnavailableView("Add your first exercise", systemImage: "dumbbell.fill", description: Text("Choose from the exercise library or create your own."))
-                        .listRowBackground(Color.clear)
-                }
+    private var hasInvalidReps: Bool {
+        exercises.contains { exercise in
+            exercise.sets.contains { $0.reps < 1 }
+        }
+    }
 
-                ForEach($exercises) { $exercise in
-                    ExerciseLoggerCard(
-                        exercise: $exercise,
-                        previous: PreviousSetEngine.mostRecentPerformance(
-                            for: exercise.name,
-                            in: allWorkouts,
-                            excluding: workout
-                        ),
-                        weightUnit: weightUnit
-                    ) {
-                        exercises.removeAll { $0.id == exercise.id }
-                    } startRest: {
-                        startRestTimer()
-                    }
-                }
+    private var saveErrorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { saveError != nil },
+            set: { isPresented in
+                if !isPresented { saveError = nil }
+            }
+        )
+    }
 
-                Section {
-                    Button { showingExercisePicker = true } label: {
-                        Label("Add exercise", systemImage: "plus.circle.fill")
-                            .fontWeight(.semibold)
-                    }
-                }
+    private var saveErrorMessage: Text {
+        Text(saveError ?? "Your entered sets are still here. Check your connection to local storage, then try Save again.")
+    }
 
+    private var invalidRPEAlertMessage: Text {
+        Text("RPE must be between 0 and 10. Expand Set details to correct the highlighted value.")
+    }
+
+    private var invalidRepsAlertMessage: Text {
+        Text("Repetitions must be at least 1. Correct the highlighted set before saving.")
+    }
+
+    private var emptyWorkoutAlertMessage: Text {
+        Text("A workout needs at least one exercise and one working set.")
+    }
+
+    private var exerciseRemovalMessage: Text {
+        Text("This removes \(exercisePendingRemoval?.name ?? "this exercise") and all of its sets from the workout.")
+    }
+
+    @ViewBuilder
+    private var exerciseLoggerCards: some View {
+        ForEach($exercises) { $exercise in
+            ExerciseLoggerCard(
+                exercise: $exercise,
+                previous: previousPerformances[exercise.name],
+                weightUnit: weightUnit
+            ) {
+                exercisePendingRemoval = exercise
+                showingExerciseRemovalConfirmation = true
+            } deleteSet: { set, index in
+                deletedSetRecovery = DeletedSetRecovery(exerciseID: exercise.id, set: set, index: index)
+            } startRest: {
+                startRestTimer()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var workoutInfoSection: some View {
+        Section("Workout") {
+            TextField("Workout name", text: $title)
+            DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
+            if isEditing {
+                Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
+            } else {
+                Button { showingRoutinePicker = true } label: {
+                    Label("Start from a routine", systemImage: "list.bullet.rectangle")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyExerciseState: some View {
+        if exercises.isEmpty {
+            ContentUnavailableView(
+                "Add your first exercise",
+                systemImage: "dumbbell.fill",
+                description: Text("Choose from the exercise library or create your own.")
+            )
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    @ViewBuilder
+    private var addExerciseSection: some View {
+        Section {
+            Button { showingExercisePicker = true } label: {
+                Label("Add exercise", systemImage: "plus.circle.fill")
+                    .fontWeight(.semibold)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var workoutList: some View {
+        List {
+            workoutInfoSection
+            emptyExerciseState
+            exerciseLoggerCards
+            addExerciseSection
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var workoutToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button(isEditing ? "Cancel" : "Discard", action: handleCancel)
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Save", action: handleSave)
+                .fontWeight(.semibold)
+        }
+    }
+
+    private var editorBaseView: some View {
+        workoutList
+            .safeAreaInset(edge: .top, spacing: 0) {
                 if !isEditing {
-                    Section("Session") {
-                        LabeledContent("Volume so far", value: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))
-                        LabeledContent("Elapsed", value: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
-                        if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
-                            LabeledContent("Rest timer", value: "\(remaining / 60):\(String(format: "%02d", remaining % 60))")
-                        }
-                    }
+                    sessionStatusBar
                 }
             }
             .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: loadDraftIfNeeded)
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { persistDraft() }
+                handleScenePhaseChange(phase)
             }
             .onChange(of: title) { _, _ in persistDraft() }
             .onChange(of: date) { _, _ in persistDraft() }
             .onChange(of: exercises) { _, _ in persistDraft() }
             .task {
+                guard !isEditing else { return }
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(1))
-                    now = .now
+                    let tick = Date.now
+                    if WorkoutInProgressEngine.restJustCompleted(endsAt: restEndsAt, previousNow: previousRestTick, now: tick) {
+                        restEndsAt = nil
+                        persistDraft()
+                        restCompletionPulse.toggle()
+                        AccessibilityNotification.Announcement("Rest complete").post()
+                    }
+                    previousRestTick = tick
+                    now = tick
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(isEditing ? "Cancel" : "Discard") {
-                        if isEditing { dismiss() } else { showingDiscardConfirmation = true }
+            .sensoryFeedback(.success, trigger: restCompletionPulse)
+            .toolbar { workoutToolbar }
+    }
+
+    private var editorView: some View {
+        editorBaseView
+            .confirmationDialog("Discard workout draft?", isPresented: $showingDiscardConfirmation, titleVisibility: .visible) {
+                Button("Discard Draft", role: .destructive, action: discardDraft)
+                Button("Keep Editing", role: .cancel) { }
+            } message: {
+                Text("This removes the unfinished workout and all of its saved sets.")
+            }
+            .confirmationDialog("Remove exercise?", isPresented: $showingExerciseRemovalConfirmation, titleVisibility: .visible) {
+                if let exercise = exercisePendingRemoval {
+                    Button("Remove \(exercise.name)", role: .destructive) {
+                        removeExercise(exercise)
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
-            }
-            .confirmationDialog("Discard workout draft?", isPresented: $showingDiscardConfirmation, titleVisibility: .visible) {
-                Button("Discard Draft", role: .destructive) { discardDraft() }
-                Button("Keep Editing", role: .cancel) { }
-            } message: { Text("This removes the unfinished workout and all of its saved sets.") }
-            .sheet(isPresented: $showingExercisePicker) {
-                ExercisePicker { exercise in
-                    let previous = PreviousSetEngine.mostRecentPerformance(
-                        for: exercise.name,
-                        in: allWorkouts,
-                        excluding: workout
-                    )
-                    exercises.append(LoggedExercise.draftExercise(from: exercise, previous: previous))
-                    showingExercisePicker = false
+                Button("Keep Exercise", role: .cancel) {
+                    exercisePendingRemoval = nil
                 }
+            } message: {
+                exerciseRemovalMessage
+            }
+            .sheet(isPresented: $showingExercisePicker) {
+                ExercisePicker(select: handlePickedExercise)
             }
             .sheet(isPresented: $showingRoutinePicker) {
-                RoutineStartPicker { routine in
-                    if exercises.isEmpty {
-                        applyRoutine(routine)
-                    } else {
-                        routinePendingReplacement = routine
-                        showingRoutineReplacementConfirmation = true
-                    }
-                    showingRoutinePicker = false
-                }
+                RoutineStartPicker(select: handlePickedRoutine)
             }
             .confirmationDialog("Replace current workout?", isPresented: $showingRoutineReplacementConfirmation, titleVisibility: .visible) {
                 Button("Replace", role: .destructive) {
@@ -260,19 +360,187 @@ struct WorkoutLoggerView: View {
                     routinePendingReplacement = nil
                 }
                 Button("Keep Editing", role: .cancel) { routinePendingReplacement = nil }
-            } message: { Text("Starting from this routine will replace the exercises you've already added.") }
+            } message: {
+                Text("Starting from this routine will replace the exercises you've already added.")
+            }
+            .alert("Check RPE values", isPresented: $showingInvalidRPEAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                invalidRPEAlertMessage
+            }
+            .alert("Check repetitions", isPresented: $showingInvalidRepsAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                invalidRepsAlertMessage
+            }
             .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
                 Button("OK", role: .cancel) { }
-            } message: { Text("A workout needs at least one exercise and one working set.") }
-            .alert("Couldn’t save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
-                Button("OK", role: .cancel) { }
-            } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
+            } message: {
+                emptyWorkoutAlertMessage
+            }
+            .alert("Couldn’t save workout", isPresented: saveErrorAlertBinding) {
+                Button("Keep Editing", role: .cancel) { }
+            } message: {
+                saveErrorMessage
+            }
+            .overlay(alignment: .bottom) {
+                deletionRecoveryOverlay
+            }
+            .animation(.snappy, value: deletedSetRecovery?.id)
+    }
+
+    var body: some View {
+        NavigationStack {
+            editorView
         }
+    }
+
+    private func handleCancel() {
+        if isEditing {
+            dismiss()
+        } else {
+            showingDiscardConfirmation = true
+        }
+    }
+
+    private func handleSave() {
+        if hasInvalidReps {
+            showingInvalidRepsAlert = true
+        } else if hasInvalidRPE {
+            showingInvalidRPEAlert = true
+        } else {
+            save()
+        }
+    }
+
+    private func handlePickedExercise(_ exercise: LibraryExercise) {
+        let previous = PreviousSetEngine.mostRecentPerformance(
+            for: exercise.name,
+            in: allWorkouts,
+            excluding: workout
+        )
+        exercises.append(LoggedExercise.draftExercise(from: exercise, previous: previous))
+        showingExercisePicker = false
+    }
+
+    private func handlePickedRoutine(_ routine: Routine) {
+        if exercises.isEmpty {
+            applyRoutine(routine)
+        } else {
+            routinePendingReplacement = routine
+            showingRoutineReplacementConfirmation = true
+        }
+        showingRoutinePicker = false
+    }
+
+    private func removeExercise(_ exercise: LoggedExercise) {
+        exercises.removeAll { $0.id == exercise.id }
+        exercisePendingRemoval = nil
+        AccessibilityNotification.Announcement("Removed \(exercise.name)").post()
     }
 
     private func applyRoutine(_ routine: Routine) {
         title = routine.name
         exercises = LoggedExercise.draftExercises(from: routine)
+    }
+
+    private func restore(_ recovery: DeletedSetRecovery) {
+        guard let exerciseIndex = exercises.firstIndex(where: { $0.id == recovery.exerciseID }) else {
+            deletedSetRecovery = nil
+            return
+        }
+        let sets = exercises[exerciseIndex].sets
+        let insertionIndex = min(recovery.index, sets.count)
+        exercises[exerciseIndex].sets.insert(recovery.set, at: insertionIndex)
+        deletedSetRecovery = nil
+        AccessibilityNotification.Announcement("Set restored").post()
+    }
+
+    private func formattedRestTime(_ seconds: Int) -> String {
+        "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+    }
+
+    @ViewBuilder
+    private var sessionStatusBar: some View {
+        HStack(spacing: 12) {
+            Image(systemName: restEndsAt != nil ? "timer" : "figure.strengthtraining.traditional")
+                .foregroundStyle(.mint)
+            VStack(alignment: .leading, spacing: 2) {
+                if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
+                    Text("Rest")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(formattedRestTime(remaining))
+                        .font(.headline.monospacedDigit())
+                } else if restEndsAt != nil {
+                    Text("Rest complete")
+                        .font(.headline)
+                    Text("Ready for your next set")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Active workout")
+                        .font(.headline)
+                    Text("Complete a set to start rest")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
+                    .font(.subheadline.monospacedDigit())
+                Text(weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if restEndsAt != nil {
+                    Button("Skip rest", action: endRestTimer)
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.borderless)
+                        .accessibilityHint("Ends the current rest timer")
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.thinMaterial)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(statusBarAccessibilityLabel)
+    }
+
+    private var statusBarAccessibilityLabel: String {
+        let elapsed = "Elapsed \(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) minutes"
+        let volume = "Volume \(weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))"
+        if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
+            return "Rest remaining \(formattedRestTime(remaining)). \(elapsed). \(volume)."
+        }
+        return restEndsAt == nil
+            ? "Active workout. Complete a set to start rest. \(elapsed). \(volume)."
+            : "Rest complete. Ready for your next set. \(elapsed). \(volume)."
+    }
+
+    @ViewBuilder
+    private var deletionRecoveryOverlay: some View {
+        if let deletedSetRecovery {
+            HStack(spacing: 12) {
+                Label("Set deleted", systemImage: "trash")
+                    .font(.subheadline)
+                Spacer()
+                Button("Undo") {
+                    restore(deletedSetRecovery)
+                }
+                .fontWeight(.semibold)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+            .background(.thinMaterial, in: Capsule())
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Set deleted. Undo available.")
+
+        }
     }
 
     private func loadDraftIfNeeded() {
@@ -308,6 +576,7 @@ struct WorkoutLoggerView: View {
         date = session.date
         sessionStart = session.sessionStart
         restEndsAt = session.restEndsAt
+        previousRestTick = Date.now
         let persistedSets = session.sets.map {
             PersistedDraftSet(
                 exercise: $0.exercise,
@@ -376,6 +645,13 @@ struct WorkoutLoggerView: View {
         persistDraft()
     }
 
+    private func endRestTimer() {
+        guard restEndsAt != nil else { return }
+        restEndsAt = nil
+        persistDraft()
+        AccessibilityNotification.Announcement("Rest skipped").post()
+    }
+
     private func discardDraft() {
         inProgressSessions.forEach(context.delete)
         do {
@@ -394,37 +670,25 @@ struct WorkoutLoggerView: View {
             guard !completedSets.isEmpty else { return nil }
             return LoggedExercise(name: exercise.name, primaryMuscle: exercise.primaryMuscle, sets: completedSets)
         }
-        // Both modes: an empty workout is an error, never an implicit delete —
-        // deletion has to be explicit and confirmed.
         guard !completedExercises.isEmpty else { showingEmptyAlert = true; return }
         let resolvedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Workout" : title
-
-        // Reuse the existing workout when editing. `calories` and `notes` are never
-        // assigned here, so they're preserved structurally — do NOT "rebuild the
-        // Workout", which would zero them on seeded/imported sessions.
         let targetWorkout = workout ?? Workout(date: date, title: resolvedTitle, durationMinutes: WorkoutTimerEngine.elapsedMinutes(start: sessionStart, end: .now))
         if workout == nil { context.insert(targetWorkout) }
         targetWorkout.date = date
         targetWorkout.title = resolvedTitle
         if isEditing { targetWorkout.durationMinutes = WorkoutTimerEngine.clampedMinutes(durationMinutes) }
-
-        // Delete the persisted sets the user dropped from the draft.
         let originalSets = workout?.sets ?? []
         let originalByID = Dictionary(uniqueKeysWithValues: originalSets.map { (ObjectIdentifier($0), $0) })
         let remainingIDs = Set(completedExercises.flatMap(\.sets).compactMap { $0.existingModel.map(ObjectIdentifier.init) })
         for removedID in WorkoutEditorLogic.removedSetIDs(original: Set(originalByID.keys), remaining: remainingIDs) {
             if let removedSet = originalByID[removedID] { context.delete(removedSet) }
         }
-
-        // Update kept sets in place, insert new ones, renumber per exercise block.
-        // `exercise`/`normalizedExercise` are deliberately not reassigned on kept
-        // rows — editing exercise identity is a non-goal and the UI has no name field.
         var finalSets: [ExerciseSet] = []
         for exercise in completedExercises {
             for (index, loggedSet) in exercise.sets.enumerated() {
                 let set = loggedSet.existingModel ?? ExerciseSet(exercise: exercise.name, weight: loggedSet.weight, reps: loggedSet.reps, setNumber: index + 1, primaryMuscle: exercise.primaryMuscle)
                 set.weight = loggedSet.weight
-                set.reps = loggedSet.reps
+                set.reps = RepsEngine.validated(loggedSet.reps)
                 set.setNumber = index + 1
                 set.setTypeRaw = loggedSet.setType.rawValue
                 set.rpe = RPEEngine.validated(loggedSet.rpe)
@@ -434,7 +698,6 @@ struct WorkoutLoggerView: View {
             }
         }
         targetWorkout.sets = finalSets
-
         do {
             try context.save()
             if !isEditing {
@@ -448,6 +711,11 @@ struct WorkoutLoggerView: View {
             saveError = "Your workout was not saved. Try again."
         }
     }
+
+    private func handleScenePhaseChange(_ phase: ScenePhase) {
+        guard phase != .active else { return }
+        persistDraft()
+    }
 }
 
 private struct ExerciseLoggerCard: View {
@@ -455,17 +723,20 @@ private struct ExerciseLoggerCard: View {
     let previous: PreviousSetPerformance?
     let weightUnit: WeightUnit
     let remove: () -> Void
+    let deleteSet: (EditableSet, Int) -> Void
     let startRest: () -> Void
 
-    private var previousSummary: String? {
-        guard let previous else { return nil }
-        let sets = previous.sets.map { "\(Self.formatWeight($0.weight, unit: weightUnit)) \(weightUnit.symbol) × \($0.reps)" }.joined(separator: ", ")
-        let age = RelativeDateTimeFormatter().localizedString(for: previous.date, relativeTo: .now)
-        return "Last: \(sets) · \(age)"
+    private enum LoggerField: Hashable {
+        case weight(UUID)
+        case reps(UUID)
     }
 
+    @State private var expandedSetIDs: Set<UUID> = []
+    @FocusState private var focusedField: LoggerField?
+    @FocusState private var rpeFieldIsFocused: Bool
+
     private var previousTextColor: Color {
-        previous?.isStale == true ? Color.secondary.opacity(0.55) : Color.secondary
+        previous?.isStale == true ? Color.secondary.opacity(0.7) : Color.secondary
     }
 
     static func formatWeight(_ weight: Double, unit: WeightUnit) -> String {
@@ -476,6 +747,9 @@ private struct ExerciseLoggerCard: View {
         Section {
             ForEach($exercise.sets) { $set in
                 let index = exercise.sets.firstIndex(where: { $0.id == set.id }) ?? 0
+                let isExpanded = expandedSetIDs.contains(set.id)
+                let rpeIsInvalid = set.rpe.map { !$0.isFinite || !(0...10).contains($0) } ?? false
+                let repsAreInvalid = set.reps < 1
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text("\(index + 1)")
@@ -484,17 +758,41 @@ private struct ExerciseLoggerCard: View {
                             .frame(width: 24)
                             .frame(minHeight: 44)
                             .accessibilityLabel("Set \(index + 1)")
-                        NumericFieldDouble(value: Binding(
-                            get: { weightUnit.fromKilograms(set.weight) },
-                            set: { set.weight = max(0, weightUnit.toKilograms($0)) }
-                        ), title: weightUnit.symbol)
-                        NumericFieldInt(value: $set.reps, title: "reps")
-                        TextField("RPE", value: $set.rpe, format: .number.precision(.fractionLength(1)))
-                            .keyboardType(.decimalPad)
-                            .frame(width: 56)
-                            .multilineTextAlignment(.center)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Optional RPE for set \(index + 1)")
+                        NumericFieldDouble(
+                            value: Binding(
+                                get: { weightUnit.fromKilograms(set.weight) },
+                                set: { enteredWeight in
+                                    let kilograms = max(0, weightUnit.toKilograms(enteredWeight))
+                                    if kilograms != weightUnit.toKilograms(enteredWeight) {
+                                        AccessibilityNotification.Announcement("Weight adjusted to \(weightUnit.formattedWithUnit(kilograms, fractionDigits: 1))").post()
+                                    }
+                                    set.weight = kilograms
+                                }
+                            ),
+                            title: weightUnit.symbol,
+                            accessibilityLabel: "Weight for set \(index + 1), in \(weightUnit.symbol)"
+                        )
+                        .focused($focusedField, equals: .weight(set.id))
+                        .submitLabel(.next)
+                        .onSubmit { focusedField = .reps(set.id) }
+                        NumericFieldInt(
+                            value: Binding(
+                                get: { set.reps },
+                                set: { enteredReps in
+                                    let validated = RepsEngine.validated(enteredReps)
+                                    if validated != enteredReps {
+                                        AccessibilityNotification.Announcement("Repetitions adjusted to \(validated)").post()
+                                    }
+                                    set.reps = validated
+                                }
+                            ),
+                            title: "reps",
+                            accessibilityLabel: "Repetitions for set \(index + 1)",
+                            isInvalid: repsAreInvalid
+                        )
+                        .focused($focusedField, equals: .reps(set.id))
+                        .submitLabel(.done)
+                        .onSubmit { focusedField = nil }
                         Button {
                             set.isCompleted.toggle()
                             if set.isCompleted { startRest() }
@@ -506,21 +804,89 @@ private struct ExerciseLoggerCard: View {
                         .buttonStyle(.borderless)
                         .accessibilityLabel(set.isCompleted ? "Mark set \(index + 1) incomplete" : "Mark set \(index + 1) complete")
                     }
-                    Picker("Set type", selection: $set.setType) {
-                        ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
+
+                    if repsAreInvalid {
+                        Text("Enter at least 1 rep")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Invalid repetitions for set \(index + 1). Enter at least 1 rep.")
                     }
-                    .pickerStyle(.menu)
-                    .accessibilityLabel("Set \(index + 1) type")
+
+                    Button {
+                        if isExpanded {
+                            expandedSetIDs.remove(set.id)
+                        } else {
+                            expandedSetIDs.insert(set.id)
+                        }
+                    } label: {
+                        Label(
+                            isExpanded ? "Hide set details" : "Set details",
+                            systemImage: isExpanded ? "chevron.up" : "slider.horizontal.3"
+                        )
+                        .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: 44, alignment: .leading)
+                    .accessibilityLabel(
+                        isExpanded
+                            ? "Hide details for set \(index + 1)"
+                            : (rpeIsInvalid ? "Show details for set \(index + 1). RPE is invalid." : "Show details for set \(index + 1)")
+                    )
+
+                    if isExpanded {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                TextField(
+                                    "RPE",
+                                    value: $set.rpe,
+                                    format: .number.precision(.fractionLength(1))
+                                )
+                                .keyboardType(.decimalPad)
+                                .focused($rpeFieldIsFocused)
+                                .toolbar {
+                                    ToolbarItemGroup(placement: .keyboard) {
+                                        Spacer()
+                                        Button("Done") { rpeFieldIsFocused = false }
+                                    }
+                                }
+                                .frame(minWidth: 56, minHeight: 44)
+                                .multilineTextAlignment(.center)
+                                .textFieldStyle(.roundedBorder)
+                                .overlay {
+                                    if rpeIsInvalid {
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .stroke(.red, lineWidth: 1)
+                                    }
+                                }
+                                .accessibilityLabel("Optional RPE from 0 to 10 for set \(index + 1)")
+                                .accessibilityValue(rpeIsInvalid ? "Invalid. Enter a number from 0 to 10." : (set.rpe.map { String(format: "%.1f", $0) } ?? "Not entered"))
+                                Text(rpeIsInvalid ? "Enter 0–10" : "RPE 0–10")
+                                    .font(.caption)
+                                    .foregroundStyle(rpeIsInvalid ? .red : .secondary)
+                            }
+                            Picker("Set type", selection: $set.setType) {
+                                ForEach(SetType.allCases) { type in
+                                    Text(type.rawValue).tag(type)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .accessibilityLabel("Set \(index + 1) type")
+                        }
+                        .padding(.leading, 32)
+                    }
+
                     if let previousSet = previous?.sets[safe: index] {
                         Text("Previous: \(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol) × \(previousSet.reps)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(.caption)
+                            .foregroundStyle(previousTextColor)
                             .lineLimit(1)
                             .accessibilityLabel("Previous performance: \(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol), \(previousSet.reps) reps")
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
+                        AccessibilityNotification.Announcement("Set \(index + 1) deleted").post()
+                        deleteSet(set, index)
                         exercise.sets.removeAll { $0.id == set.id }
                     } label: {
                         Label("Delete set", systemImage: "trash")
@@ -528,7 +894,9 @@ private struct ExerciseLoggerCard: View {
                 }
             }
             Button {
-                exercise.sets.append(WorkoutEditorLogic.nextSetDefaults(current: exercise.sets, previous: previous))
+                let newSet = WorkoutEditorLogic.nextSetDefaults(current: exercise.sets, previous: previous)
+                exercise.sets.append(newSet)
+                focusedField = .weight(newSet.id)
             } label: {
                 Label("Add set", systemImage: "plus")
             }
@@ -537,8 +905,11 @@ private struct ExerciseLoggerCard: View {
                 VStack(alignment: .leading) {
                     Text(exercise.name).font(.headline)
                     Text(exercise.primaryMuscle.rawValue).font(.caption).foregroundStyle(.secondary)
-                    if let previousSummary {
-                        Text(previousSummary).font(.caption).foregroundStyle(previousTextColor)
+                    if let previous {
+                        Text("Last trained \(RelativeDateTimeFormatter().localizedString(for: previous.date, relativeTo: .now))")
+                            .font(.caption)
+                            .foregroundStyle(previousTextColor)
+                            .lineLimit(1)
                     }
                 }
                 Spacer()
@@ -560,13 +931,55 @@ private extension Array {
 private struct NumericFieldInt: View {
     @Binding var value: Int
     let title: String
-    var body: some View { TextField(title, value: $value, format: .number).keyboardType(.numberPad).multilineTextAlignment(.center).textFieldStyle(.roundedBorder).frame(maxWidth: 90) }
+    let accessibilityLabel: String
+    var isInvalid = false
+    @FocusState private var valueFieldIsFocused: Bool
+
+    var body: some View {
+        TextField(title, value: $value, format: .number)
+            .keyboardType(.numberPad)
+            .focused($valueFieldIsFocused)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { valueFieldIsFocused = false }
+                }
+            }
+            .multilineTextAlignment(.center)
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 64, minHeight: 44)
+            .overlay {
+                if isInvalid {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(.red, lineWidth: 1)
+                }
+            }
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(isInvalid ? "Invalid. Enter at least 1 repetition." : "\(value)")
+    }
 }
 
 private struct NumericFieldDouble: View {
     @Binding var value: Double
     let title: String
-    var body: some View { TextField(title, value: $value, format: .number.precision(.fractionLength(1))).keyboardType(.decimalPad).multilineTextAlignment(.center).textFieldStyle(.roundedBorder).frame(maxWidth: 90) }
+    let accessibilityLabel: String
+    @FocusState private var valueFieldIsFocused: Bool
+
+    var body: some View {
+        TextField(title, value: $value, format: .number.precision(.fractionLength(1)))
+            .keyboardType(.decimalPad)
+            .focused($valueFieldIsFocused)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { valueFieldIsFocused = false }
+                }
+            }
+            .multilineTextAlignment(.center)
+            .textFieldStyle(.roundedBorder)
+            .frame(minWidth: 64, minHeight: 44)
+            .accessibilityLabel(accessibilityLabel)
+    }
 }
 
 struct RoutineStartPicker: View {

@@ -13,6 +13,16 @@ final class WorkoutInProgressTests: XCTestCase {
         XCTAssertEqual(WorkoutInProgressEngine.volume(of: [exercise]), 500, accuracy: 0.001)
     }
 
+    func testRestJustCompletedFiresOnlyOnTheCompletionTick() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let endsAt = start.addingTimeInterval(90)
+
+        XCTAssertFalse(WorkoutInProgressEngine.restJustCompleted(endsAt: nil, previousNow: start, now: start))
+        XCTAssertFalse(WorkoutInProgressEngine.restJustCompleted(endsAt: endsAt, previousNow: start, now: start.addingTimeInterval(1)))
+        XCTAssertTrue(WorkoutInProgressEngine.restJustCompleted(endsAt: endsAt, previousNow: endsAt.addingTimeInterval(-1), now: endsAt))
+        XCTAssertFalse(WorkoutInProgressEngine.restJustCompleted(endsAt: endsAt, previousNow: endsAt, now: endsAt.addingTimeInterval(1)))
+    }
+
     func testRestCountdownHandlesMissingAndExpiredTimers() {
         let now = Date(timeIntervalSince1970: 1_000)
 

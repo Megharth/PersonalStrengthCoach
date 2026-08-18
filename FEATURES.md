@@ -132,7 +132,7 @@ Log training sessions with exercise-by-exercise tracking.
 1. From History tab, tap **+** → **Log workout**.
 2. Set workout name and date/time.
 3. Tap **Add exercise** to choose from the library or create a custom exercise.
-4. For each exercise, log sets with weight in your selected kg/lb unit, reps, set type, and optional RPE. Saved values remain canonical kilograms.
+4. For each exercise, log sets with weight in your selected kg/lb unit and reps. These primary fields stay visible for fast entry; tap **Set details** when you need set type or optional RPE. Saved values remain canonical kilograms.
    Set types distinguish warmups, working sets, drop sets, and failure sets. When
    the exercise has prior history, the corresponding sets are prefilled from the
    most recent workout and remain fully editable; prior RPE is never copied. Adding
@@ -145,13 +145,14 @@ Log training sessions with exercise-by-exercise tracking.
 - **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, reps, and set type. Optional RPE is stored in half-point increments from 0 to 10; RIR is derived from RPE. Warmup sets remain visible but are excluded from volume and strength analytics, while working, drop, and failure sets count normally.
 - **Duration tracking** — Workout duration is automatically calculated from session start to save time.
 - **Resumable sessions** — The in-progress workout is persisted on-device, including exercise/set values, completion state, elapsed time, and an absolute rest-timer deadline. The Session section shows completed-set volume and elapsed time while logging. Backgrounding and view recreation restore the draft; History provides an explicit Resume action after relaunch.
-- **Rest timer** — Completing a set starts a 90-second in-sheet countdown; it survives backgrounding and view recreation and never displays negative time. The timer is a local in-sheet indicator; ActivityKit/Live Activities are not part of this feature.
+- **Rest timer** — Completing a set starts a 90-second in-sheet countdown; it survives backgrounding and view recreation and never displays negative time. Use **Skip rest** when ready early; completion announces the transition and provides haptic feedback. The timer is a local in-sheet indicator; ActivityKit/Live Activities are not part of this feature.
 - **Draft safety** — Unfinished drafts are excluded from completed-workout exports. Delete All Local Data removes drafts and their saved sets. Saving a completed workout removes its draft only after the completed save succeeds; invalid or failed saves leave the draft recoverable. Discard is explicit and confirmed.
 - **Start from Routine** — Load a saved routine to pre-fill exercises and target sets/reps (see below). Routine targets take precedence over previous-workout prefill.
 
 **Tips:**
 - For bodyweight exercises (push-ups, pull-ups), log 0 in your selected unit; it remains canonical zero kilograms in storage.
-- The logger validates that each workout has at least one exercise with one set before saving.
+- The logger validates that each workout has at least one exercise with one set before saving, and repetitions must be between 1 and 999.
+- Invalid repetitions are highlighted before saving; deleting a set offers an accessible Undo recovery.
 - Tap the trash icon next to an exercise to remove it from the session.
 
 ---
