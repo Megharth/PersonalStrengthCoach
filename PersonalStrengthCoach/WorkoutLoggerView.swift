@@ -18,7 +18,9 @@ struct EditableSet: Identifiable, Hashable {
         self.reps = reps
         self.isCompleted = isCompleted
         self.setType = setType
-        self.rpe = RPEEngine.validated(rpe)
+        // Preserve the entered value so the logger can show and correct invalid RPE
+        // instead of silently dropping it before validation.
+        self.rpe = rpe
     }
 
     init(model: ExerciseSet) {
@@ -82,8 +84,36 @@ private struct DeletedSetRecovery: Identifiable {
 }
 
 enum WorkoutEditorLogic {
+    enum InvalidField: Hashable {
+        case reps(UUID)
+        case rpe(UUID)
+    }
+
     static func removedSetIDs(original: Set<ObjectIdentifier>, remaining: Set<ObjectIdentifier>) -> Set<ObjectIdentifier> {
         original.subtracting(remaining)
+    }
+
+    /// Returns invalid fields in the same order the logger presents them.
+    /// Keeping both fields in the result lets the UI show every correction at once.
+    static func invalidFields(in exercises: [LoggedExercise]) -> [InvalidField] {
+        exercises.flatMap { exercise in
+            exercise.sets.flatMap { set -> [InvalidField] in
+                var fields: [InvalidField] = []
+                if set.reps < 1 { fields.append(.reps(set.id)) }
+                if let rpe = set.rpe, !rpe.isFinite || !(0...10).contains(rpe) {
+                    fields.append(.rpe(set.id))
+                }
+                return fields
+            }
+        }
+    }
+
+    static func firstInvalidField(in exercises: [LoggedExercise]) -> InvalidField? {
+        invalidFields(in: exercises).first
+    }
+
+    static func nextIncompleteSetID(in exercises: [LoggedExercise]) -> UUID? {
+        exercises.lazy.flatMap(\.sets).first(where: { !$0.isCompleted })?.id
     }
 
     /// Selects safe defaults for the next draft row without carrying completion
@@ -126,6 +156,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     let workout: Workout?
@@ -140,8 +171,7 @@ struct WorkoutLoggerView: View {
     @State private var routinePendingReplacement: Routine?
     @State private var showingRoutineReplacementConfirmation = false
     @State private var showingEmptyAlert = false
-    @State private var showingInvalidRPEAlert = false
-    @State private var showingInvalidRepsAlert = false
+    @State private var validationAttempted = false
     @State private var saveError: String?
     @State private var restEndsAt: Date?
     @State private var now = Date.now
@@ -151,6 +181,7 @@ struct WorkoutLoggerView: View {
     @State private var exercisePendingRemoval: LoggedExercise?
     @State private var showingExerciseRemovalConfirmation = false
     @State private var deletedSetRecovery: DeletedSetRecovery?
+    @State private var deletionExpiryTask: Task<Void, Never>?
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
@@ -173,21 +204,6 @@ struct WorkoutLoggerView: View {
 
     private var isEditing: Bool { workout != nil }
 
-    private var hasInvalidRPE: Bool {
-        exercises.contains { exercise in
-            exercise.sets.contains { set in
-                guard let rpe = set.rpe else { return false }
-                return !rpe.isFinite || !(0...10).contains(rpe)
-            }
-        }
-    }
-
-    private var hasInvalidReps: Bool {
-        exercises.contains { exercise in
-            exercise.sets.contains { $0.reps < 1 }
-        }
-    }
-
     private var saveErrorAlertBinding: Binding<Bool> {
         Binding(
             get: { saveError != nil },
@@ -199,14 +215,6 @@ struct WorkoutLoggerView: View {
 
     private var saveErrorMessage: Text {
         Text(saveError ?? "Your entered sets are still here. Check your connection to local storage, then try Save again.")
-    }
-
-    private var invalidRPEAlertMessage: Text {
-        Text("RPE must be between 0 and 10. Expand Set details to correct the highlighted value.")
-    }
-
-    private var invalidRepsAlertMessage: Text {
-        Text("Repetitions must be at least 1. Correct the highlighted set before saving.")
     }
 
     private var emptyWorkoutAlertMessage: Text {
@@ -223,12 +231,14 @@ struct WorkoutLoggerView: View {
             ExerciseLoggerCard(
                 exercise: $exercise,
                 previous: previousPerformances[exercise.name],
-                weightUnit: weightUnit
+                weightUnit: weightUnit,
+                validationAttempted: validationAttempted,
+                nextIncompleteSetID: WorkoutEditorLogic.nextIncompleteSetID(in: exercises)
             ) {
                 exercisePendingRemoval = exercise
                 showingExerciseRemovalConfirmation = true
             } deleteSet: { set, index in
-                deletedSetRecovery = DeletedSetRecovery(exerciseID: exercise.id, set: set, index: index)
+                showDeletionRecovery(for: DeletedSetRecovery(exerciseID: exercise.id, set: set, index: index))
             } startRest: {
                 startRestTimer()
             }
@@ -310,6 +320,9 @@ struct WorkoutLoggerView: View {
             .accessibilityIdentifier(isEditing ? "screen.editWorkout" : "screen.logWorkout")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear(perform: loadDraftIfNeeded)
+            .onDisappear {
+                clearDeletionRecovery()
+            }
             .onChange(of: scenePhase) { _, phase in
                 handleScenePhaseChange(phase)
             }
@@ -370,16 +383,6 @@ struct WorkoutLoggerView: View {
             } message: {
                 Text("Starting from this routine will replace the exercises you've already added.")
             }
-            .alert("Check RPE values", isPresented: $showingInvalidRPEAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                invalidRPEAlertMessage
-            }
-            .alert("Check repetitions", isPresented: $showingInvalidRepsAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                invalidRepsAlertMessage
-            }
             .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
@@ -393,7 +396,7 @@ struct WorkoutLoggerView: View {
             .overlay(alignment: .bottom) {
                 deletionRecoveryOverlay
             }
-            .animation(.snappy, value: deletedSetRecovery?.id)
+            .animation(accessibilityReduceMotion ? nil : .snappy, value: deletedSetRecovery?.id)
     }
 
     var body: some View {
@@ -411,12 +414,22 @@ struct WorkoutLoggerView: View {
     }
 
     private func handleSave() {
-        if hasInvalidReps {
-            showingInvalidRepsAlert = true
-        } else if hasInvalidRPE {
-            showingInvalidRPEAlert = true
-        } else {
-            save()
+        validationAttempted = true
+        guard WorkoutEditorLogic.invalidFields(in: exercises).isEmpty else {
+            focusFirstInvalidField()
+            return
+        }
+        save()
+    }
+
+    private func focusFirstInvalidField() {
+        guard let firstInvalid = WorkoutEditorLogic.firstInvalidField(in: exercises) else { return }
+        switch firstInvalid {
+        case .reps:
+            // The row owns the field focus; the inline error remains visible for every set.
+            AccessibilityNotification.Announcement("Correct the highlighted repetitions and RPE values").post()
+        case .rpe:
+            AccessibilityNotification.Announcement("Correct the highlighted RPE and repetitions values").post()
         }
     }
 
@@ -452,6 +465,8 @@ struct WorkoutLoggerView: View {
     }
 
     private func restore(_ recovery: DeletedSetRecovery) {
+        deletionExpiryTask?.cancel()
+        deletionExpiryTask = nil
         guard let exerciseIndex = exercises.firstIndex(where: { $0.id == recovery.exerciseID }) else {
             deletedSetRecovery = nil
             return
@@ -461,6 +476,23 @@ struct WorkoutLoggerView: View {
         exercises[exerciseIndex].sets.insert(recovery.set, at: insertionIndex)
         deletedSetRecovery = nil
         AccessibilityNotification.Announcement("Set restored").post()
+    }
+
+    private func showDeletionRecovery(for recovery: DeletedSetRecovery) {
+        deletionExpiryTask?.cancel()
+        deletedSetRecovery = recovery
+        deletionExpiryTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            deletedSetRecovery = nil
+            deletionExpiryTask = nil
+        }
+    }
+
+    private func clearDeletionRecovery() {
+        deletionExpiryTask?.cancel()
+        deletionExpiryTask = nil
+        deletedSetRecovery = nil
     }
 
     private func formattedRestTime(_ seconds: Int) -> String {
@@ -497,7 +529,7 @@ struct WorkoutLoggerView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text("\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
                     .font(.subheadline.monospacedDigit())
-                Text(weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))
+                Text("Volume \(weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if restEndsAt != nil {
@@ -543,7 +575,7 @@ struct WorkoutLoggerView: View {
             .background(.thinMaterial, in: Capsule())
             .padding(.horizontal)
             .padding(.bottom, 8)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .transition(accessibilityReduceMotion ? .identity : .move(edge: .bottom).combined(with: .opacity))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Set deleted. Undo available.")
 
@@ -662,6 +694,7 @@ struct WorkoutLoggerView: View {
     private func discardDraft() {
         inProgressSessions.forEach(context.delete)
         do {
+            clearDeletionRecovery()
             try context.save()
             dismiss()
         } catch {
@@ -706,6 +739,7 @@ struct WorkoutLoggerView: View {
         }
         targetWorkout.sets = finalSets
         do {
+            clearDeletionRecovery()
             try context.save()
             if !isEditing {
                 inProgressSessions.forEach(context.delete)
@@ -729,6 +763,8 @@ private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
     let previous: PreviousSetPerformance?
     let weightUnit: WeightUnit
+    let validationAttempted: Bool
+    let nextIncompleteSetID: UUID?
     let remove: () -> Void
     let deleteSet: (EditableSet, Int) -> Void
     let startRest: () -> Void
@@ -739,6 +775,7 @@ private struct ExerciseLoggerCard: View {
     }
 
     @State private var expandedSetIDs: Set<UUID> = []
+    @State private var commitVersions: [UUID: Int] = [:]
     @FocusState private var focusedField: LoggerField?
     @FocusState private var rpeFieldIsFocused: Bool
 
@@ -757,7 +794,9 @@ private struct ExerciseLoggerCard: View {
                 let isExpanded = expandedSetIDs.contains(set.id)
                 let rpeIsInvalid = set.rpe.map { !$0.isFinite || !(0...10).contains($0) } ?? false
                 let repsAreInvalid = set.reps < 1
-                VStack(alignment: .leading, spacing: 4) {
+                let shouldShowValidation = validationAttempted || repsAreInvalid || rpeIsInvalid
+                let isNextIncomplete = nextIncompleteSetID == set.id
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text("\(index + 1)")
                             .font(.caption.weight(.bold))
@@ -777,7 +816,10 @@ private struct ExerciseLoggerCard: View {
                                 }
                             ),
                             title: weightUnit.symbol,
-                            accessibilityLabel: "Weight for set \(index + 1), in \(weightUnit.symbol)"
+                            accessibilityLabel: "Weight for set \(index + 1), in \(weightUnit.symbol)",
+                            suggestedValue: weightUnit.fromKilograms(set.weight),
+                            prompt: weightUnit.formatted(set.weight),
+                            commitTrigger: commitVersions[set.id, default: 0]
                         )
                         .focused($focusedField, equals: .weight(set.id))
                         .submitLabel(.next)
@@ -786,54 +828,78 @@ private struct ExerciseLoggerCard: View {
                             value: Binding(
                                 get: { set.reps },
                                 set: { enteredReps in
-                                    let validated = RepsEngine.validated(enteredReps)
-                                    if validated != enteredReps {
-                                        AccessibilityNotification.Announcement("Repetitions adjusted to \(validated)").post()
-                                    }
-                                    set.reps = validated
+                                    // Keep out-of-range input visible so inline validation can explain how to correct it.
+                                    // RepsEngine.validated remains the single normalization rule at save time.
+                                    set.reps = enteredReps
                                 }
                             ),
                             title: "reps",
                             accessibilityLabel: "Repetitions for set \(index + 1)",
+                            suggestedValue: set.reps,
+                            prompt: "\(set.reps)",
+                            commitTrigger: commitVersions[set.id, default: 0],
                             isInvalid: repsAreInvalid
                         )
                         .focused($focusedField, equals: .reps(set.id))
+                        .accessibilityIdentifier("workout.set.\(index + 1).reps")
                         .submitLabel(.done)
                         .onSubmit { focusedField = nil }
                         Button {
                             set.isCompleted.toggle()
-                            if set.isCompleted { startRest() }
+                            if set.isCompleted {
+                                commitVersions[set.id, default: 0] += 1
+                                startRest()
+                            }
                         } label: {
                             Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(set.isCompleted ? .mint : .secondary)
                                 .frame(minWidth: 44, minHeight: 44)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityIdentifier("workout.set.\(index + 1).complete")
                         .accessibilityLabel(set.isCompleted ? "Mark set \(index + 1) incomplete" : "Mark set \(index + 1) complete")
                     }
 
-                    if repsAreInvalid {
+                    if shouldShowValidation && repsAreInvalid {
                         Text("Enter at least 1 rep")
+                            .accessibilityIdentifier("workout.set.\(index + 1).repsError")
                             .font(.caption)
                             .foregroundStyle(.red)
                             .accessibilityLabel("Invalid repetitions for set \(index + 1). Enter at least 1 rep.")
                     }
 
-                    Button {
-                        if isExpanded {
-                            expandedSetIDs.remove(set.id)
-                        } else {
-                            expandedSetIDs.insert(set.id)
+                    HStack(spacing: 12) {
+                        Button {
+                            if isExpanded {
+                                expandedSetIDs.remove(set.id)
+                            } else {
+                                expandedSetIDs.insert(set.id)
+                            }
+                        } label: {
+                            Image(systemName: isExpanded ? "chevron.up" : "slider.horizontal.3")
+                                .frame(width: 44, height: 44)
                         }
-                    } label: {
-                        Label(
-                            isExpanded ? "Hide set details" : "Set details",
-                            systemImage: isExpanded ? "chevron.up" : "slider.horizontal.3"
-                        )
-                        .font(.caption)
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("workout.set.\(index + 1).details")
+                        .accessibilityLabel(isExpanded ? "Hide details for set \(index + 1)" : "Show details for set \(index + 1)")
+                        .accessibilityHint("Shows optional RPE and set type")
+
+                        Spacer(minLength: 8)
+
+                        Button(role: .destructive) {
+                            AccessibilityNotification.Announcement("Set \(index + 1) deleted").post()
+                            deleteSet(set, index)
+                            exercise.sets.removeAll { $0.id == set.id }
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("workout.set.\(index + 1).delete")
+                        .accessibilityLabel("Delete set \(index + 1)")
+                        .accessibilityHint("Deletes this set and offers Undo for six seconds")
                     }
-                    .buttonStyle(.borderless)
-                    .frame(minHeight: 44, alignment: .leading)
+                    .accessibilityElement(children: .contain)
                     .accessibilityLabel(
                         isExpanded
                             ? "Hide details for set \(index + 1)"
@@ -850,12 +916,6 @@ private struct ExerciseLoggerCard: View {
                                 )
                                 .keyboardType(.decimalPad)
                                 .focused($rpeFieldIsFocused)
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        Spacer()
-                                        Button("Done") { rpeFieldIsFocused = false }
-                                    }
-                                }
                                 .frame(minWidth: 56, minHeight: 44)
                                 .multilineTextAlignment(.center)
                                 .textFieldStyle(.roundedBorder)
@@ -865,12 +925,24 @@ private struct ExerciseLoggerCard: View {
                                             .stroke(.red, lineWidth: 1)
                                     }
                                 }
+                                .accessibilityIdentifier("workout.set.\(index + 1).rpe")
                                 .accessibilityLabel("Optional RPE from 0 to 10 for set \(index + 1)")
-                                .accessibilityValue(rpeIsInvalid ? "Invalid. Enter a number from 0 to 10." : (set.rpe.map { String(format: "%.1f", $0) } ?? "Not entered"))
+                                .accessibilityValue(rpeIsInvalid ? "Invalid. Enter a number from 0 to 10." : (set.rpe.map { $0.formatted(.number.precision(.fractionLength(1))) } ?? "Not entered"))
                                 Text(rpeIsInvalid ? "Enter 0–10" : "RPE 0–10")
                                     .font(.caption)
                                     .foregroundStyle(rpeIsInvalid ? .red : .secondary)
                             }
+                            if shouldShowValidation && rpeIsInvalid {
+                                Text("Enter an RPE from 0 to 10")
+                                    .accessibilityIdentifier("workout.set.\(index + 1).rpeError")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .accessibilityLabel("Invalid RPE for set \(index + 1). Enter a value from 0 to 10.")
+                            }
+                            Text("RPE is optional effort from 0–10; each half point is about one rep in reserve.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                             Picker("Set type", selection: $set.setType) {
                                 ForEach(SetType.allCases) { type in
                                     Text(type.rawValue).tag(type)
@@ -878,6 +950,7 @@ private struct ExerciseLoggerCard: View {
                             }
                             .pickerStyle(.menu)
                             .accessibilityLabel("Set \(index + 1) type")
+                            .accessibilityHint("Working is a normal set; Warmup, Drop Set, and Failure describe how this set was performed.")
                         }
                         .padding(.leading, 32)
                     }
@@ -888,6 +961,16 @@ private struct ExerciseLoggerCard: View {
                             .foregroundStyle(previousTextColor)
                             .lineLimit(1)
                             .accessibilityLabel("Previous performance: \(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol), \(previousSet.reps) reps")
+                    }
+                }
+                .padding(.leading, 12)
+                .padding(.vertical, isNextIncomplete ? 3 : 0)
+                .overlay(alignment: .leading) {
+                    if isNextIncomplete {
+                        Capsule()
+                            .fill(.mint)
+                            .frame(width: 3)
+                            .accessibilityHidden(true)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -907,6 +990,7 @@ private struct ExerciseLoggerCard: View {
             } label: {
                 Label("Add set", systemImage: "plus")
             }
+            .accessibilityHint("Adds another set to \(exercise.name)")
         } header: {
             HStack {
                 VStack(alignment: .leading) {
@@ -939,19 +1023,17 @@ private struct NumericFieldInt: View {
     @Binding var value: Int
     let title: String
     let accessibilityLabel: String
+    let suggestedValue: Int
+    let prompt: String
+    let commitTrigger: Int
     var isInvalid = false
+    @State private var enteredText = ""
     @FocusState private var valueFieldIsFocused: Bool
 
     var body: some View {
-        TextField(title, value: $value, format: .number)
+        TextField(title, text: $enteredText, prompt: Text(prompt))
             .keyboardType(.numberPad)
             .focused($valueFieldIsFocused)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { valueFieldIsFocused = false }
-                }
-            }
             .multilineTextAlignment(.center)
             .textFieldStyle(.roundedBorder)
             .frame(minWidth: 64, minHeight: 44)
@@ -962,7 +1044,39 @@ private struct NumericFieldInt: View {
                 }
             }
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityValue(isInvalid ? "Invalid. Enter at least 1 repetition." : "\(value)")
+            .accessibilityValue(enteredText.isEmpty ? "Suggested \(prompt)" : enteredText)
+            .onSubmit(commit)
+            .onChange(of: valueFieldIsFocused) { _, isFocused in
+                if isFocused {
+                    if enteredText == prompt {
+                        enteredText = ""
+                    }
+                } else {
+                    commit()
+                }
+            }
+            .onChange(of: commitTrigger) { _, _ in
+                commit()
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        valueFieldIsFocused = false
+                    }
+                }
+            }
+    }
+
+    private func commit() {
+        let trimmedText = enteredText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedText.isEmpty {
+            value = suggestedValue
+            enteredText = prompt
+        } else if let enteredValue = Int(trimmedText) {
+            value = enteredValue
+            enteredText = trimmedText
+        }
     }
 }
 
@@ -970,22 +1084,55 @@ private struct NumericFieldDouble: View {
     @Binding var value: Double
     let title: String
     let accessibilityLabel: String
+    let suggestedValue: Double
+    let prompt: String
+    let commitTrigger: Int
+    @State private var enteredText = ""
     @FocusState private var valueFieldIsFocused: Bool
 
     var body: some View {
-        TextField(title, value: $value, format: .number.precision(.fractionLength(1)))
+        TextField(title, text: $enteredText, prompt: Text(prompt))
             .keyboardType(.decimalPad)
             .focused($valueFieldIsFocused)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { valueFieldIsFocused = false }
-                }
-            }
             .multilineTextAlignment(.center)
             .textFieldStyle(.roundedBorder)
             .frame(minWidth: 64, minHeight: 44)
             .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(enteredText.isEmpty ? "Suggested \(prompt)" : enteredText)
+            .onSubmit(commit)
+            .onChange(of: valueFieldIsFocused) { _, isFocused in
+                if isFocused {
+                    if enteredText == prompt {
+                        enteredText = ""
+                    }
+                } else {
+                    commit()
+                }
+            }
+            .onChange(of: commitTrigger) { _, _ in
+                commit()
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        valueFieldIsFocused = false
+                    }
+                }
+            }
+    }
+
+    private func commit() {
+        let trimmedText = enteredText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedText.isEmpty {
+            value = suggestedValue
+            enteredText = prompt
+        } else if let enteredValue = Double(trimmedText.replacingOccurrences(of: ",", with: ".")), enteredValue.isFinite {
+            let normalizedValue = max(0, enteredValue)
+            value = normalizedValue
+            // Keep the visible value honest when negative input is rejected by the binding.
+            enteredText = normalizedValue == enteredValue ? trimmedText : "0"
+        }
     }
 }
 
@@ -1039,7 +1186,9 @@ struct ExercisePicker: View {
             List {
                 ForEach(MuscleGroup.allCases) { muscle in
                     let choices = exercises.filter { $0.primaryMuscle == muscle }
-                    if !choices.isEmpty { Section(muscle.rawValue) { ForEach(choices) { exercise in Button(exercise.name) { select(exercise) }.foregroundStyle(.primary) } } }
+                    if !choices.isEmpty { Section(muscle.rawValue) { ForEach(choices) { exercise in Button(exercise.name) { select(exercise) }
+                            .foregroundStyle(.primary)
+                            .accessibilityIdentifier("exercisePicker.exercise.\(exercise.name)") } } }
                 }
             }
             .searchable(text: $search, prompt: "Search exercises")

@@ -1,6 +1,6 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-16
+**Status:** Active · **Last updated:** 2026-08-18
 
 ## Current focus
 
@@ -128,7 +128,7 @@ XCTests.
    - **4a. Previous-set reference + editable prefill in the logger** — shipped
      2026-08-15; scoped in §4.2.
 5. **RPE/RIR + set type** on `ExerciseSet` (warmup, working, drop, failure).
-   **Shipped 2026-08-16** — optional canonical RPE (0–10, half-point increments), derived RIR, set-type controls, warmup exclusion from volume/e1RM/PR analytics, draft/edit/import/export support, and V4→V5 migration compatibility. Unlocks autoregulation and cleaner volume math (exclude warmups).
+   **Shipped 2026-08-16** — optional canonical RPE (0–10, half-point increments), derived RIR, set-type controls, warmup exclusion from volume/e1RM/PR analytics, draft/edit/import/export support, and V4→V5 migration compatibility. Unlocks autoregulation and cleaner volume math (exclude warmups). The 2026-08-18 logger refinement adds simultaneous inline reps/RPE validation, clearer set-details guidance, visible recoverable set deletion, contextual session status, and Reduce Motion support without changing the data model or analytics sequencing.
 6. **Unit preference** (kg/lb) app-wide. **Shipped 2026-08-16** — added app-wide kg/lb entry and presentation with canonical kilogram persistence, selected-unit import previews, and focused conversion tests. Users enter the exact total weight used for each set; no plate-loading assumptions are made.
 
 ### P1 — Analytics

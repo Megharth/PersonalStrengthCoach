@@ -375,7 +375,11 @@ struct DataManagementView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Your data") {
-                    Button { prepareExport() } label: { Label("Export my data", systemImage: "square.and.arrow.up") }
+                    Button { prepareExport() } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("Export my data")
                     Text("Exports workouts, recovery records, custom exercises, and routines as JSON. HealthKit history itself is not changed.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }

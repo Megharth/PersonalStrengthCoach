@@ -16,6 +16,49 @@ final class WorkoutEditorLogicTests: XCTestCase {
         return workout
     }
 
+    func testInvalidFieldsReturnsAllInvalidRepsAndRPEInDisplayOrder() {
+        let first = EditableSet(reps: 0, rpe: 11)
+        let second = EditableSet(reps: 8, rpe: -1)
+        let exercises = [
+            LoggedExercise(name: "Bench Press", primaryMuscle: .chest, sets: [first, second])
+        ]
+
+        let invalid = WorkoutEditorLogic.invalidFields(in: exercises)
+
+        XCTAssertEqual(invalid, [.reps(first.id), .rpe(first.id), .rpe(second.id)])
+        XCTAssertEqual(WorkoutEditorLogic.firstInvalidField(in: exercises), .reps(first.id))
+    }
+
+    func testInvalidFieldsIsEmptyForValidBoundaryValues() {
+        let exercises = [LoggedExercise(name: "Squat", primaryMuscle: .quads, sets: [
+            EditableSet(reps: 1, rpe: 0),
+            EditableSet(reps: 999, rpe: 10)
+        ])]
+
+        XCTAssertTrue(WorkoutEditorLogic.invalidFields(in: exercises).isEmpty)
+        XCTAssertNil(WorkoutEditorLogic.firstInvalidField(in: exercises))
+    }
+
+    func testNextIncompleteSetIDFindsFirstIncompleteSetAcrossExercises() {
+        let completed = EditableSet(isCompleted: true)
+        let next = EditableSet()
+        let later = EditableSet()
+        let exercises = [
+            LoggedExercise(name: "Bench Press", primaryMuscle: .chest, sets: [completed, next]),
+            LoggedExercise(name: "Squat", primaryMuscle: .quads, sets: [later])
+        ]
+
+        XCTAssertEqual(WorkoutEditorLogic.nextIncompleteSetID(in: exercises), next.id)
+    }
+
+    func testNextIncompleteSetIDIsNilWhenAllSetsAreComplete() {
+        let exercises = [LoggedExercise(name: "Bench Press", primaryMuscle: .chest, sets: [
+            EditableSet(isCompleted: true)
+        ])]
+
+        XCTAssertNil(WorkoutEditorLogic.nextIncompleteSetID(in: exercises))
+    }
+
     func testRemovedSetIDsIsEmptyWhenNothingWasDropped() {
         let ids = Set([makeSet("Bench Press", weight: 60, reps: 8, setNumber: 1)].map(ObjectIdentifier.init))
         XCTAssertTrue(WorkoutEditorLogic.removedSetIDs(original: ids, remaining: ids).isEmpty)
