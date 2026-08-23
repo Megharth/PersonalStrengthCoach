@@ -24,6 +24,7 @@ struct RootView: View {
             #if DEBUG
             SeedData.loadIfNeeded(context: context, workouts: workouts)
             #endif
+            guard !ProcessInfo.processInfo.arguments.contains("-uitesting") else { return }
             await syncHealthKit()
         }
         .alert(healthKitAlert?.title ?? "Health data", isPresented: Binding(get: { healthKitAlert != nil }, set: { if !$0 { healthKitAlert = nil } })) {
@@ -167,9 +168,10 @@ struct WorkoutHistoryView: View {
             ContentUnavailableView("No workouts yet", systemImage: "dumbbell.fill", description: Text("Log your first session from the + menu to start tracking volume, PRs, and recovery."))
                 .listRowBackground(Color.clear)
         } else {
-        ForEach(workouts) { workout in NavigationLink { WorkoutDetailView(workout: workout, history: workouts) } label: {
+        ForEach(Array(workouts.enumerated()), id: \.element.id) { index, workout in NavigationLink { WorkoutDetailView(workout: workout, history: workouts) } label: {
             HStack { Image(systemName: "dumbbell.fill").foregroundStyle(.mint).frame(width: 30); VStack(alignment: .leading) { Text(workout.title).font(.headline); Text(workout.date.formatted(date: .abbreviated, time: .omitted)).foregroundStyle(.secondary) }; Spacer(); VStack(alignment: .trailing) { Text(weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0)).font(.subheadline.weight(.semibold)); Text("\(workout.durationMinutes) min").font(.caption).foregroundStyle(.secondary) } }
-        } }
+        }
+        .accessibilityIdentifier("workoutRow-\(index)") }
         // Swipe arms the confirmation rather than deleting outright — this is
         // unrecoverable and `.onDelete` has no built-in confirmation.
         .onDelete { offsets in
@@ -182,9 +184,11 @@ struct WorkoutHistoryView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { startNewWorkoutTapped() } label: { Label("Log workout", systemImage: "plus.circle") }
+                        .accessibilityIdentifier("logWorkoutMenuItem")
                     NavigationLink { RoutinesListView() } label: { Label("Routines", systemImage: "list.bullet.rectangle") }
                     NavigationLink { StrongImportView() } label: { Label("Import from Strong", systemImage: "square.and.arrow.down") }
                 } label: { Image(systemName: "plus") }
+                .accessibilityIdentifier("addWorkoutMenuButton")
             }
         }
         .sheet(isPresented: $showingLogger) { WorkoutLoggerView() }
@@ -280,6 +284,7 @@ struct WorkoutDetailView: View {
     .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
             Button { showingEditor = true } label: { Label("Edit Workout", systemImage: "pencil") }
+                .accessibilityIdentifier("editWorkoutButton")
         }
     }
     // WorkoutLoggerView owns its own NavigationStack, so present it bare.

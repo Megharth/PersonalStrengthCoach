@@ -7,7 +7,15 @@ struct PersonalStrengthCoachApp: App {
 
     init() {
         do {
-            container = try ModelContainer(for: Schema(AppSchemaV5.models), migrationPlan: AppMigrationPlan.self)
+            if ProcessInfo.processInfo.arguments.contains("-uitesting") {
+                // UI tests need a pristine, deterministic store on every launch —
+                // an in-memory store means each run starts empty and gets
+                // reseeded, with no leftover drafts/state from prior runs.
+                let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+                container = try ModelContainer(for: Schema(AppSchemaV5.models), configurations: configuration)
+            } else {
+                container = try ModelContainer(for: Schema(AppSchemaV5.models), migrationPlan: AppMigrationPlan.self)
+            }
         } catch {
             fatalError("Could not create the data store: \(error)")
         }

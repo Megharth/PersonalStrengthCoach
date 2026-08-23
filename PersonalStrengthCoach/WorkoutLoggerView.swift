@@ -185,11 +185,13 @@ struct WorkoutLoggerView: View {
 
                 if !isEditing {
                     Section("Session") {
-                        LabeledContent("Volume so far", value: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0))
-                        LabeledContent("Elapsed", value: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min")
-                        if let remaining = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now), remaining > 0 {
-                            LabeledContent("Rest timer", value: "\(remaining / 60):\(String(format: "%02d", remaining % 60))")
-                        }
+                        SessionStatsStrip(
+                            volume: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0),
+                            elapsed: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min",
+                            rest: WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now).flatMap { $0 > 0 ? "\($0 / 60):\(String(format: "%02d", $0 % 60))" : nil }
+                        )
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
@@ -438,12 +440,68 @@ struct WorkoutLoggerView: View {
     }
 }
 
+/// Volume/Elapsed/Rest as equal-width cells in one hairline-divided strip,
+/// matching the "Expandable Card" mockup's stat-strip pattern.
+private struct SessionStatsStrip: View {
+    let volume: String
+    let elapsed: String
+    let rest: String?
+
+    var body: some View {
+        HStack(spacing: 1) {
+            StatStripCell(label: "Volume", value: volume)
+            StatStripCell(label: "Elapsed", value: elapsed)
+            if let rest {
+                StatStripCell(label: "Rest", value: rest, valueColor: .mint)
+            }
+        }
+        .background(Color(uiColor: .separator))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("sessionStatsStrip")
+    }
+}
+
+private struct StatStripCell: View {
+    let label: String
+    let value: String
+    var valueColor: Color = .primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label.uppercased()).font(.system(size: 11, weight: .semibold)).tracking(0.2).foregroundStyle(.secondary)
+            Text(value).font(.system(size: 17, weight: .bold)).foregroundStyle(valueColor)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 10)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("statStripCell-\(label)")
+        .accessibilityLabel("\(label) \(value)")
+    }
+}
+
+/// Set rows behave as an accordion: only one set per exercise is fully open for
+/// editing at a time (`expandedSetID`), the rest collapse to a single scannable
+/// line. This keeps a workout with several sets from turning into a wall of
+/// simultaneously-editable text fields.
 private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
     let previous: PreviousSetPerformance?
     let weightUnit: WeightUnit
     let remove: () -> Void
     let startRest: () -> Void
+    @State private var expandedSetID: EditableSet.ID?
+
+    init(exercise: Binding<LoggedExercise>, previous: PreviousSetPerformance?, weightUnit: WeightUnit, remove: @escaping () -> Void, startRest: @escaping () -> Void) {
+        self._exercise = exercise
+        self.previous = previous
+        self.weightUnit = weightUnit
+        self.remove = remove
+        self.startRest = startRest
+        self._expandedSetID = State(initialValue: exercise.wrappedValue.sets.first { !$0.isCompleted }?.id)
+    }
 
     private var previousSummary: String? {
         guard let previous else { return nil }
@@ -464,45 +522,33 @@ private struct ExerciseLoggerCard: View {
         Section {
             ForEach($exercise.sets) { $set in
                 let index = exercise.sets.firstIndex(where: { $0.id == set.id }) ?? 0
-                HStack {
-                    Text("\(index + 1)")
-                        .font(.caption.weight(.bold)).foregroundStyle(.secondary).frame(width: 18)
-                    NumericFieldDouble(value: Binding(
-                        get: { weightUnit.fromKilograms(set.weight) },
-                        set: { set.weight = max(0, weightUnit.toKilograms($0)) }
-                    ), title: weightUnit.symbol)
-                    NumericFieldInt(value: $set.reps, title: "reps")
-                    Picker("Set type", selection: $set.setType) {
-                        ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
+                if expandedSetID == set.id {
+                    ExpandedSetRow(
+                        set: $set,
+                        index: index,
+                        weightUnit: weightUnit,
+                        previousSet: previous?.sets[safe: index],
+                        collapse: { expandedSetID = nil },
+                        markDone: { markDone(id: set.id) }
+                    )
+                } else {
+                    CollapsedSetRow(set: set, index: index, weightUnit: weightUnit) {
+                        expandedSetID = set.id
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .accessibilityLabel("Set type")
-                    TextField("RPE", value: $set.rpe, format: .number.precision(.fractionLength(1)))
-                        .keyboardType(.decimalPad)
-                        .frame(width: 48)
-                        .multilineTextAlignment(.center)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel("Optional RPE")
-                    if let previousSet = previous?.sets[safe: index] {
-                        Text("\(Self.formatWeight(previousSet.weight, unit: weightUnit)) \(weightUnit.symbol) × \(previousSet.reps)")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-                    Button {
-                        set.isCompleted.toggle()
-                        if set.isCompleted { startRest() }
-                    } label: {
-                        Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(set.isCompleted ? .mint : .secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    Button(role: .destructive) { exercise.sets.removeAll { $0.id == set.id } } label: { Image(systemName: "minus.circle") }
-                        .buttonStyle(.borderless)
                 }
             }
-            Button { exercise.sets.append(EditableSet()) } label: { Label("Add set", systemImage: "plus") }
+            .onDelete { offsets in
+                let removedIDs = Set(offsets.map { exercise.sets[$0].id })
+                exercise.sets.remove(atOffsets: offsets)
+                if let expandedSetID, removedIDs.contains(expandedSetID) {
+                    self.expandedSetID = nil
+                }
+            }
+            Button {
+                let newSet = EditableSet()
+                exercise.sets.append(newSet)
+                expandedSetID = newSet.id
+            } label: { Label("Add set", systemImage: "plus") }
         } header: {
             HStack {
                 VStack(alignment: .leading) {
@@ -513,9 +559,215 @@ private struct ExerciseLoggerCard: View {
                     }
                 }
                 Spacer()
-                Button(role: .destructive, action: remove) { Image(systemName: "trash") }.buttonStyle(.borderless)
+                Button(role: .destructive, action: remove) { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Remove exercise")
             }
         }
+    }
+
+    /// Toggles completion; when a set is newly completed, starts the rest timer
+    /// and hands the accordion off to the next incomplete set so a linear
+    /// logging session doesn't need a manual tap to open the next row.
+    private func markDone(id: EditableSet.ID) {
+        guard let setIndex = exercise.sets.firstIndex(where: { $0.id == id }) else { return }
+        let willComplete = !exercise.sets[setIndex].isCompleted
+        exercise.sets[setIndex].isCompleted = willComplete
+        guard willComplete else { return }
+        startRest()
+        expandedSetID = exercise.sets[(setIndex + 1)...].first { !$0.isCompleted }?.id
+    }
+}
+
+private struct CollapsedSetRow: View {
+    let set: EditableSet
+    let index: Int
+    let weightUnit: WeightUnit
+    let expand: () -> Void
+
+    var body: some View {
+        Button(action: expand) {
+            HStack(spacing: 12) {
+                Text("\(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .background(Circle().fill(Color(.tertiarySystemFill)))
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(weightUnit.formatted(set.weight)) \(weightUnit.symbol) × \(set.reps)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(set.setType.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if set.isCompleted {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.mint)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Set \(index + 1), \(weightUnit.formatted(set.weight)) \(weightUnit.symbol) by \(set.reps) reps, \(set.setType.rawValue), \(set.isCompleted ? "completed" : "not completed")")
+        .accessibilityHint("Double tap to edit this set")
+        .accessibilityIdentifier("setRow-\(index)")
+    }
+}
+
+private enum SetInputField: Hashable {
+    case weight
+    case reps
+}
+
+private struct ExpandedSetRow: View {
+    @Binding var set: EditableSet
+    let index: Int
+    let weightUnit: WeightUnit
+    let previousSet: ExerciseSet?
+    let collapse: () -> Void
+    let markDone: () -> Void
+    @FocusState private var focusedField: SetInputField?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Set \(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.mint)
+                Spacer()
+                Button(action: collapse) {
+                    Image(systemName: "chevron.up").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Collapse set \(index + 1)")
+            }
+
+            HStack(spacing: 12) {
+                WeightInputField(weightKg: $set.weight, unit: weightUnit, focusedField: $focusedField, index: index)
+                RepsInputField(reps: $set.reps, focusedField: $focusedField, index: index)
+            }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focusedField = nil }
+                }
+            }
+
+            Picker("Set type", selection: $set.setType) {
+                ForEach(SetType.allCases) { type in Text(type.rawValue).tag(type) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Set type")
+
+            HStack {
+                Text("RPE").font(.subheadline).foregroundStyle(.secondary)
+                Spacer()
+                RPEStepperControl(rpe: $set.rpe)
+            }
+
+            if let previousSet {
+                Text("Last time: \(weightUnit.formatted(previousSet.weight)) \(weightUnit.symbol) × \(previousSet.reps)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(action: markDone) {
+                Label(set.isCompleted ? "Completed" : "Mark Complete", systemImage: set.isCompleted ? "checkmark.circle.fill" : "checkmark.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.mint)
+            .accessibilityIdentifier("markCompleteButton-\(index)")
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+private struct WeightInputField: View {
+    @Binding var weightKg: Double
+    let unit: WeightUnit
+    var focusedField: FocusState<SetInputField?>.Binding
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Weight").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                TextField("0", value: Binding(
+                    get: { unit.fromKilograms(weightKg) },
+                    set: { weightKg = max(0, unit.toKilograms($0)) }
+                ), format: .number.precision(.fractionLength(0...2)).grouping(.never))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.center)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .focused(focusedField, equals: .weight)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityIdentifier("weightField-\(index)")
+                Text(unit.symbol).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct RepsInputField: View {
+    @Binding var reps: Int
+    var focusedField: FocusState<SetInputField?>.Binding
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Reps").font(.caption).foregroundStyle(.secondary)
+            TextField("0", value: Binding(
+                get: { reps },
+                set: { reps = max(1, $0) }
+            ), format: .number.grouping(.never))
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.center)
+            .font(.subheadline.weight(.semibold))
+            .monospacedDigit()
+            .focused(focusedField, equals: .reps)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+            .accessibilityIdentifier("repsField-\(index)")
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct RPEStepperControl: View {
+    @Binding var rpe: Double?
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Button { decrement() } label: { Image(systemName: "minus.circle.fill") }
+                .disabled(rpe == nil)
+            Text(rpe.map { String(format: "%.1f", $0) } ?? "—")
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .frame(minWidth: 30)
+            Button { increment() } label: { Image(systemName: "plus.circle.fill") }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.mint)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("RPE")
+        .accessibilityValue(rpe.map { String(format: "%.1f", $0) } ?? "Not set")
+    }
+
+    private func increment() { rpe = RPEEngine.validated((rpe ?? 5.5) + 0.5) }
+    private func decrement() {
+        guard let current = rpe else { return }
+        rpe = RPEEngine.validated(current - 0.5)
     }
 }
 
@@ -523,18 +775,6 @@ private extension Array {
     subscript(safe index: Index) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
-}
-
-private struct NumericFieldInt: View {
-    @Binding var value: Int
-    let title: String
-    var body: some View { TextField(title, value: $value, format: .number).keyboardType(.numberPad).multilineTextAlignment(.center).textFieldStyle(.roundedBorder).frame(maxWidth: 90) }
-}
-
-private struct NumericFieldDouble: View {
-    @Binding var value: Double
-    let title: String
-    var body: some View { TextField(title, value: $value, format: .number.precision(.fractionLength(1))).keyboardType(.decimalPad).multilineTextAlignment(.center).textFieldStyle(.roundedBorder).frame(maxWidth: 90) }
 }
 
 struct RoutineStartPicker: View {
