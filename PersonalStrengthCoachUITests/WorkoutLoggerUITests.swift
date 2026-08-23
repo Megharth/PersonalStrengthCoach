@@ -70,6 +70,45 @@ final class WorkoutLoggerUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "statStripCell-Rest").firstMatch.exists)
     }
 
+    /// Regression coverage for removing the manual workout date field: the
+    /// logger infers date/time from the session's start and end instead of
+    /// letting the user pick one, on both the new-workout and edit-workout
+    /// paths.
+    func testWorkoutLoggerDoesNotShowADateField() throws {
+        app.tabBars.buttons["History"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        XCTAssertTrue(app.textFields["Workout name"].waitForExistence(timeout: 5), "Expected the new-workout logger to appear")
+        assertNoDateField()
+
+        app.buttons["Discard"].tap()
+        app.buttons["Discard Draft"].tap()
+
+        let firstWorkoutRow = app.buttons["workoutRow-0"]
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in History")
+        firstWorkoutRow.tap()
+
+        let editWorkoutButton = app.buttons["editWorkoutButton"]
+        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
+        editWorkoutButton.tap()
+
+        XCTAssertTrue(app.textFields["Workout name"].waitForExistence(timeout: 5), "Expected the edit-workout logger to appear")
+        assertNoDateField()
+    }
+
+    private func assertNoDateField() {
+        XCTAssertEqual(app.datePickers.count, 0, "The workout logger should not expose a date picker")
+        let dateLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Date")).firstMatch
+        XCTAssertFalse(dateLabel.exists, "The workout logger should not show a standalone Date field")
+    }
+
     private func replaceText(in field: XCUIElement, with text: String) {
         field.tap()
         if let existing = field.value as? String, !existing.isEmpty {

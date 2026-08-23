@@ -111,7 +111,6 @@ struct WorkoutLoggerView: View {
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     let workout: Workout?          // nil == log a new workout
     @State private var title = "Workout"
-    @State private var date = Date.now
     @State private var sessionStart = Date.now
     @State private var durationMinutes = 0
     @State private var exercises: [LoggedExercise] = []
@@ -145,7 +144,6 @@ struct WorkoutLoggerView: View {
             List {
                 Section("Workout") {
                     TextField("Workout name", text: $title)
-                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     if isEditing {
                         Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
                     } else {
@@ -202,7 +200,6 @@ struct WorkoutLoggerView: View {
                 if phase != .active { persistDraft() }
             }
             .onChange(of: title) { _, _ in persistDraft() }
-            .onChange(of: date) { _, _ in persistDraft() }
             .onChange(of: exercises) { _, _ in persistDraft() }
             .task {
                 while !Task.isCancelled {
@@ -270,7 +267,7 @@ struct WorkoutLoggerView: View {
         hasLoadedDraft = true
         if let workout {
             title = workout.title
-            date = workout.date
+            sessionStart = workout.date
             durationMinutes = workout.durationMinutes
             exercises = LoggedExercise.draftExercises(from: workout)
             return
@@ -295,7 +292,6 @@ struct WorkoutLoggerView: View {
             return
         }
         title = session.title
-        date = session.date
         sessionStart = session.sessionStart
         restEndsAt = session.restEndsAt
         let persistedSets = session.sets.map {
@@ -321,11 +317,11 @@ struct WorkoutLoggerView: View {
         if let existing = inProgressSessions.first {
             session = existing
         } else {
-            session = WorkoutInProgress(title: title, date: date, sessionStart: sessionStart, lastUpdated: now)
+            session = WorkoutInProgress(title: title, date: sessionStart, sessionStart: sessionStart, lastUpdated: now)
             context.insert(session)
         }
         session.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Workout" : title
-        session.date = date
+        session.date = sessionStart
         session.sessionStart = sessionStart
         session.lastUpdated = now
         session.restEndsAt = restEndsAt
@@ -392,9 +388,9 @@ struct WorkoutLoggerView: View {
         // Reuse the existing workout when editing. `calories` and `notes` are never
         // assigned here, so they're preserved structurally — do NOT "rebuild the
         // Workout", which would zero them on seeded/imported sessions.
-        let targetWorkout = workout ?? Workout(date: date, title: resolvedTitle, durationMinutes: WorkoutTimerEngine.elapsedMinutes(start: sessionStart, end: .now))
+        let targetWorkout = workout ?? Workout(date: sessionStart, title: resolvedTitle, durationMinutes: WorkoutTimerEngine.elapsedMinutes(start: sessionStart, end: .now))
         if workout == nil { context.insert(targetWorkout) }
-        targetWorkout.date = date
+        targetWorkout.date = sessionStart
         targetWorkout.title = resolvedTitle
         if isEditing { targetWorkout.durationMinutes = WorkoutTimerEngine.clampedMinutes(durationMinutes) }
 
