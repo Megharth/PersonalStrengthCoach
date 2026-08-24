@@ -499,21 +499,6 @@ private struct ExerciseLoggerCard: View {
         self._expandedSetID = State(initialValue: exercise.wrappedValue.sets.first { !$0.isCompleted }?.id)
     }
 
-    private var previousSummary: String? {
-        guard let previous else { return nil }
-        let sets = previous.sets.map { "\(Self.formatWeight($0.weight, unit: weightUnit)) \(weightUnit.symbol) × \($0.reps)" }.joined(separator: ", ")
-        let age = RelativeDateTimeFormatter().localizedString(for: previous.date, relativeTo: .now)
-        return "Last: \(sets) · \(age)"
-    }
-
-    private var previousTextColor: Color {
-        previous?.isStale == true ? Color.secondary.opacity(0.55) : Color.secondary
-    }
-
-    static func formatWeight(_ weight: Double, unit: WeightUnit) -> String {
-        unit.formatted(weight)
-    }
-
     var body: some View {
         Section {
             ForEach($exercise.sets) { $set in
@@ -550,9 +535,6 @@ private struct ExerciseLoggerCard: View {
                 VStack(alignment: .leading) {
                     Text(exercise.name).font(.headline)
                     Text(exercise.primaryMuscle.rawValue).font(.caption).foregroundStyle(.secondary)
-                    if let previousSummary {
-                        Text(previousSummary).font(.caption).foregroundStyle(previousTextColor)
-                    }
                 }
                 Spacer()
                 Button(role: .destructive, action: remove) { Image(systemName: "trash") }
@@ -643,6 +625,13 @@ private struct ExpandedSetRow: View {
                 .accessibilityLabel("Collapse set \(index + 1)")
             }
 
+            if let previousSet {
+                PreviousSetReferenceBanner(previousSet: previousSet, weightUnit: weightUnit, index: index) {
+                    set.weight = previousSet.weight
+                    set.reps = previousSet.reps
+                }
+            }
+
             HStack(spacing: 12) {
                 WeightInputField(weightKg: $set.weight, unit: weightUnit, focusedField: $focusedField, index: index)
                 RepsInputField(reps: $set.reps, focusedField: $focusedField, index: index)
@@ -666,12 +655,6 @@ private struct ExpandedSetRow: View {
                 RPEStepperControl(rpe: $set.rpe)
             }
 
-            if let previousSet {
-                Text("Last time: \(weightUnit.formatted(previousSet.weight)) \(weightUnit.symbol) × \(previousSet.reps)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Button(action: markDone) {
                 Label(set.isCompleted ? "Completed" : "Mark Complete", systemImage: set.isCompleted ? "checkmark.circle.fill" : "checkmark.circle")
                     .frame(maxWidth: .infinity)
@@ -681,6 +664,44 @@ private struct ExpandedSetRow: View {
             .accessibilityIdentifier("markCompleteButton-\(index)")
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// Surfaces the prior session's weight/reps for this set right beside the
+/// fields being edited, so the reference is visible at the moment it's
+/// actionable instead of buried below the RPE control.
+private struct PreviousSetReferenceBanner: View {
+    let previousSet: ExerciseSet
+    let weightUnit: WeightUnit
+    let index: Int
+    let useAction: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .foregroundStyle(.mint)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("LAST TIME")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.mint)
+                    Text("\(weightUnit.formatted(previousSet.weight)) \(weightUnit.symbol) × \(previousSet.reps)")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.primary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Last time \(weightUnit.formatted(previousSet.weight)) \(weightUnit.symbol) by \(previousSet.reps) reps")
+            Spacer()
+            Button("Use", action: useAction)
+                .buttonStyle(.borderedProminent)
+                .tint(.mint)
+                .controlSize(.small)
+                .accessibilityIdentifier("usePreviousSetButton-\(index)")
+        }
+        .padding(10)
+        .background(Color.mint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.mint.opacity(0.35), lineWidth: 1))
     }
 }
 

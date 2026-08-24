@@ -10,7 +10,10 @@ struct PersonalStrengthCoachApp: App {
             if ProcessInfo.processInfo.arguments.contains("-uitesting") {
                 // UI tests need a pristine, deterministic store on every launch —
                 // an in-memory store means each run starts empty and gets
-                // reseeded, with no leftover drafts/state from prior runs.
+                // reseeded, with no leftover drafts/state from prior runs. Reset
+                // AppStorage-backed preferences too, so a unit toggled during
+                // manual testing on the same simulator can't leak into a run.
+                UserDefaults.standard.removeObject(forKey: "weightUnit")
                 let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
                 container = try ModelContainer(for: Schema(AppSchemaV5.models), configurations: configuration)
             } else {

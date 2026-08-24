@@ -103,6 +103,41 @@ final class WorkoutLoggerUITests: XCTestCase {
         assertNoDateField()
     }
 
+    /// Regression coverage for the "Last time" reference banner: editing a set
+    /// with a matching prior-session performance must show the previous
+    /// weight/reps beside the input fields, and tapping Use must copy those
+    /// values into the fields (rather than requiring the user to retype them
+    /// from a caption buried below RPE).
+    func testPreviousSetBannerUseButtonFillsFields() throws {
+        app.tabBars.buttons["History"].tap()
+
+        // Seeded data has two "Pull Day" workouts with a "Barbell Row" exercise;
+        // the most recent one (workoutRow-0) has an older one to reference.
+        let firstWorkoutRow = app.buttons["workoutRow-0"]
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in History")
+        firstWorkoutRow.tap()
+
+        let editWorkoutButton = app.buttons["editWorkoutButton"]
+        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
+        editWorkoutButton.tap()
+
+        let setRow = app.buttons.matching(identifier: "setRow-0").firstMatch
+        XCTAssertTrue(setRow.waitForExistence(timeout: 5))
+        setRow.tap()
+
+        let weightField = app.textFields["weightField-0"]
+        let repsField = app.textFields["repsField-0"]
+        XCTAssertTrue(weightField.waitForExistence(timeout: 5))
+        XCTAssertEqual(weightField.value as? String, "90", "Sanity check: this workout's own logged weight before using the previous value")
+
+        let useButton = app.buttons["usePreviousSetButton-0"]
+        XCTAssertTrue(useButton.waitForExistence(timeout: 5), "Expected the previous-set reference banner's Use button on the expanded set row")
+        useButton.tap()
+
+        XCTAssertEqual(weightField.value as? String, "87.5", "Expected Use to copy the previous session's weight into the field")
+        XCTAssertEqual(repsField.value as? String, "8", "Expected Use to copy the previous session's reps into the field")
+    }
+
     private func assertNoDateField() {
         XCTAssertEqual(app.datePickers.count, 0, "The workout logger should not expose a date picker")
         let dateLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Date")).firstMatch

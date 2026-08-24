@@ -1,6 +1,6 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-16
+**Status:** Active · **Last updated:** 2026-08-23
 
 ## Current focus
 
@@ -491,16 +491,24 @@ independently of the rest timer and `WorkoutInProgress` persistence, which are
 now also shipped under the completed item 4 implementation.
 
 **Implemented**
-- `ExerciseLoggerCard` shows the most recent prior performance under the exercise
-  header, including relative age, with references older than eight weeks dimmed.
+- *Redesigned 2026-08-23:* the aggregate "Last: ..." summary previously shown
+  under the `ExerciseLoggerCard` header, and the dim per-set caption previously
+  shown below the RPE control on each `ExpandedSetRow`, are both removed — they
+  were passive metadata read at the wrong moment. In their place,
+  `ExpandedSetRow` shows an accentuated `PreviousSetReferenceBanner` directly
+  above the Weight/Reps fields on the actively-expanded set, with a "Use"
+  button that copies the previous set's weight/reps into the fields being
+  edited. This surfaces the reference at the point it's actionable rather than
+  requiring the user to read it separately and retype it.
 - Lookup excludes the workout being edited, matches normalized exercise names, and
   orders sets by `setNumber` with deterministic tie-breakers.
-- Each current set row shows a dim reference to the corresponding prior set when
-  one exists; first-time exercises show no placeholder.
+- First-time exercises show no banner (no placeholder).
 - Routine-prefilled targets remain unchanged; manually added exercises initialize
   editable draft sets from the corresponding sets in the most recent performance.
 - Added focused `PreviousSetTests` coverage for recency, aliases, edit exclusion,
   first-time exercises, ordering, equal-date determinism, and draft prefill.
+  Added `WorkoutLoggerUITests.testPreviousSetBannerUseButtonFillsFields` for the
+  banner's Use button end-to-end.
 
 **Related shipped implementation**
 - Rest timer, running volume, and `WorkoutInProgress` persistence are shipped

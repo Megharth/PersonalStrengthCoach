@@ -141,6 +141,7 @@ Log training sessions with exercise-by-exercise tracking.
 **Features:**
 - **Custom exercises** — Add any movement not in the built-in library. Assign it a primary muscle group for accurate recovery tracking.
 - **Set management** — Add/remove sets on the fly. Each set shows its set number, weight, reps, and set type. Optional RPE is stored in half-point increments from 0 to 10; RIR is derived from RPE. Warmup sets remain visible but are excluded from volume and strength analytics, while working, drop, and failure sets count normally.
+- **Previous-set reference** — Expanding a set that has a matching prior-session performance shows a "Last time" banner directly above the Weight/Reps fields, with a **Use** button that copies the previous weight and reps straight into the fields being edited.
 - **Duration tracking** — Workout duration is automatically calculated from session start to save time.
 - **Resumable sessions** — The in-progress workout is persisted on-device, including exercise/set values, completion state, elapsed time, and an absolute rest-timer deadline. The Session section shows completed-set volume and elapsed time while logging. Backgrounding and view recreation restore the draft; History provides an explicit Resume action after relaunch.
 - **Rest timer** — Completing a set starts a 90-second in-sheet countdown; it survives backgrounding and view recreation and never displays negative time. The timer is a local in-sheet indicator; ActivityKit/Live Activities are not part of this feature.
