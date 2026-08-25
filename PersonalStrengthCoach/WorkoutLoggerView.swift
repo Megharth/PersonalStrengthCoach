@@ -110,13 +110,13 @@ struct WorkoutLoggerView: View {
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     let workout: Workout?          // nil == log a new workout
+    let startingRoutine: Routine?  // pre-fill from Routines tab when logging a new workout
     @State private var title = "Workout"
     @State private var sessionStart = Date.now
     @State private var durationMinutes = 0
     @State private var exercises: [LoggedExercise] = []
     @State private var hasLoadedDraft = false
     @State private var showingExercisePicker = false
-    @State private var showingRoutinePicker = false
     @State private var routinePendingReplacement: Routine?
     @State private var showingRoutineReplacementConfirmation = false
     @State private var showingEmptyAlert = false
@@ -133,8 +133,9 @@ struct WorkoutLoggerView: View {
     // stored non-defaulted property: adding it removes the synthesized default init,
     // and the memberwise one is private (the `@State` are), so it can't be seen
     // from `RootView`.
-    init(workout: Workout? = nil) {
+    init(workout: Workout? = nil, startingRoutine: Routine? = nil) {
         self.workout = workout
+        self.startingRoutine = startingRoutine
     }
 
     private var isEditing: Bool { workout != nil }
@@ -146,10 +147,6 @@ struct WorkoutLoggerView: View {
                     TextField("Workout name", text: $title)
                     if isEditing {
                         Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
-                    } else {
-                        Button { showingRoutinePicker = true } label: {
-                            Label("Start from a routine", systemImage: "list.bullet.rectangle")
-                        }
                     }
                 }
 
@@ -230,17 +227,6 @@ struct WorkoutLoggerView: View {
                     showingExercisePicker = false
                 }
             }
-            .sheet(isPresented: $showingRoutinePicker) {
-                RoutineStartPicker { routine in
-                    if exercises.isEmpty {
-                        applyRoutine(routine)
-                    } else {
-                        routinePendingReplacement = routine
-                        showingRoutineReplacementConfirmation = true
-                    }
-                    showingRoutinePicker = false
-                }
-            }
             .confirmationDialog("Replace current workout?", isPresented: $showingRoutineReplacementConfirmation, titleVisibility: .visible) {
                 Button("Replace", role: .destructive) {
                     if let routine = routinePendingReplacement { applyRoutine(routine) }
@@ -287,27 +273,36 @@ struct WorkoutLoggerView: View {
             }
         }
 
-        guard let session = resolved.current else {
+        if let session = resolved.current {
+            title = session.title
+            sessionStart = session.sessionStart
+            restEndsAt = session.restEndsAt
+            let persistedSets = session.sets.map {
+                PersistedDraftSet(
+                    exercise: $0.exercise,
+                    primaryMuscle: $0.primaryMuscle,
+                    exerciseOrder: $0.exerciseOrder,
+                    weight: $0.weight,
+                    reps: $0.reps,
+                    setNumber: $0.setNumber,
+                    isCompleted: $0.isCompleted,
+                    setType: $0.setType,
+                    rpe: $0.rpe
+                )
+            }
+            exercises = WorkoutInProgressEngine.draftExercises(from: persistedSets)
+        } else {
             persistDraft()
-            return
         }
-        title = session.title
-        sessionStart = session.sessionStart
-        restEndsAt = session.restEndsAt
-        let persistedSets = session.sets.map {
-            PersistedDraftSet(
-                exercise: $0.exercise,
-                primaryMuscle: $0.primaryMuscle,
-                exerciseOrder: $0.exerciseOrder,
-                weight: $0.weight,
-                reps: $0.reps,
-                setNumber: $0.setNumber,
-                isCompleted: $0.isCompleted,
-                setType: $0.setType,
-                rpe: $0.rpe
-            )
+
+        if let startingRoutine {
+            if exercises.isEmpty {
+                applyRoutine(startingRoutine)
+            } else {
+                routinePendingReplacement = startingRoutine
+                showingRoutineReplacementConfirmation = true
+            }
         }
-        exercises = WorkoutInProgressEngine.draftExercises(from: persistedSets)
     }
 
     private func persistDraft() {
@@ -791,37 +786,6 @@ private struct RPEStepperControl: View {
 private extension Array {
     subscript(safe index: Index) -> Element? {
         indices.contains(index) ? self[index] : nil
-    }
-}
-
-struct RoutineStartPicker: View {
-    @Environment(\.dismiss) private var dismiss
-    @Query(sort: \Routine.name) private var routines: [Routine]
-    let select: (Routine) -> Void
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if routines.isEmpty {
-                    ContentUnavailableView("No saved routines", systemImage: "list.bullet.rectangle", description: Text("Create a routine from Workout History to start sessions faster."))
-                        .listRowBackground(Color.clear)
-                } else {
-                    ForEach(routines) { routine in
-                        Button { select(routine) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(routine.name).font(.headline)
-                                Text("\(routine.exercises.count) exercise\(routine.exercises.count == 1 ? "" : "s")")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .foregroundStyle(.primary)
-                    }
-                }
-            }
-            .navigationTitle("Start Routine")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-        }
     }
 }
 

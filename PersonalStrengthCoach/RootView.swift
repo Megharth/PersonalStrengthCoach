@@ -186,6 +186,7 @@ struct WorkoutHistoryView: View {
                     Button { startNewWorkoutTapped() } label: { Label("Log workout", systemImage: "plus.circle") }
                         .accessibilityIdentifier("logWorkoutMenuItem")
                     NavigationLink { RoutinesListView() } label: { Label("Routines", systemImage: "list.bullet.rectangle") }
+                        .accessibilityIdentifier("routinesMenuItem")
                     NavigationLink { StrongImportView() } label: { Label("Import from Strong", systemImage: "square.and.arrow.down") }
                 } label: { Image(systemName: "plus") }
                 .accessibilityIdentifier("addWorkoutMenuButton")

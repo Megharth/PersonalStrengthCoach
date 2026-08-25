@@ -55,6 +55,7 @@ struct RoutinesListView: View {
     @Query(sort: \Routine.createdAt, order: .reverse) private var routines: [Routine]
     @State private var showingCreator = false
     @State private var errorMessage: String?
+    @State private var startingRoutine: Routine?
 
     var body: some View {
         List {
@@ -62,7 +63,7 @@ struct RoutinesListView: View {
                 ContentUnavailableView("No saved routines", systemImage: "list.bullet.rectangle", description: Text("Create a template for sessions you repeat often."))
                     .listRowBackground(Color.clear)
             } else {
-                ForEach(routines) { routine in
+                ForEach(Array(routines.enumerated()), id: \.element.id) { index, routine in
                     NavigationLink { RoutineEditorView(routine: routine) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(routine.name).font(.headline)
@@ -70,6 +71,14 @@ struct RoutinesListView: View {
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+                    .accessibilityIdentifier("routineRow-\(index)")
+                    .swipeActions(edge: .leading) {
+                        Button { startingRoutine = routine } label: {
+                            Label("Start", systemImage: "play.fill")
+                        }
+                        .tint(.mint)
+                        .accessibilityIdentifier("startRoutineButton-\(index)")
                     }
                 }
                 .onDelete(perform: deleteRoutines)
@@ -83,6 +92,9 @@ struct RoutinesListView: View {
         }
         .sheet(isPresented: $showingCreator) {
             NavigationStack { RoutineEditorView(routine: nil) }
+        }
+        .sheet(item: $startingRoutine) { routine in
+            WorkoutLoggerView(startingRoutine: routine)
         }
         .alert("Couldn’t update routines", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { }
