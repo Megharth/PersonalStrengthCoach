@@ -29,7 +29,7 @@ The project uses only Apple frameworks: SwiftUI, SwiftData, Charts, and Uniform 
 
 ## Using the app
 
-Open **History**, tap **+**, and choose **Log workout** to record a session. From the same menu, choose **Import from Strong** to select or paste an export. The Today, Dashboard, Recovery, and Coach tabs update from the saved data.
+Open **Workouts**, tap **+**, and choose **Log workout** to record a session. From the same menu, choose **Import from Strong** to select or paste an export. The Today, Dashboard, Recovery, and Coach tabs update from the saved data.
 
 All workout and recovery records are stored locally with SwiftData. Apple Health access is read-only.
 Sample data is added only in debug builds; release builds show data saved on the device.

@@ -15,7 +15,7 @@ final class RoutinesUITests: XCTestCase {
     /// Start must open the logger pre-filled with that routine's exercises,
     /// and the logger itself must no longer expose its own routine picker.
     func testStartActionOnRoutineRowOpensPrefilledLogger() throws {
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Workouts"].tap()
 
         let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
         XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))

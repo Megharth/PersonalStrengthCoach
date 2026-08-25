@@ -14,10 +14,10 @@ final class WorkoutLoggerUITests: XCTestCase {
     /// the Weight/Reps fields must replace the value exactly, not duplicate
     /// digits via SwiftUI's live number reformatting.
     func testWeightAndRepsKeyboardInputDoesNotDuplicateDigits() throws {
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Workouts"].tap()
 
         let firstWorkoutRow = app.buttons["workoutRow-0"]
-        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in History")
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
         firstWorkoutRow.tap()
 
         let editWorkoutButton = app.buttons["editWorkoutButton"]
@@ -43,7 +43,7 @@ final class WorkoutLoggerUITests: XCTestCase {
     /// Elapsed, and (when active) Rest must render as a single stat-strip row
     /// rather than three stacked LabeledContent rows.
     func testSessionStatsStripShowsVolumeAndElapsedInOneRow() throws {
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Workouts"].tap()
 
         let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
         XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
@@ -75,7 +75,7 @@ final class WorkoutLoggerUITests: XCTestCase {
     /// letting the user pick one, on both the new-workout and edit-workout
     /// paths.
     func testWorkoutLoggerDoesNotShowADateField() throws {
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Workouts"].tap()
 
         let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
         XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
@@ -92,7 +92,7 @@ final class WorkoutLoggerUITests: XCTestCase {
         app.buttons["Discard Draft"].tap()
 
         let firstWorkoutRow = app.buttons["workoutRow-0"]
-        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in History")
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
         firstWorkoutRow.tap()
 
         let editWorkoutButton = app.buttons["editWorkoutButton"]
@@ -109,12 +109,12 @@ final class WorkoutLoggerUITests: XCTestCase {
     /// values into the fields (rather than requiring the user to retype them
     /// from a caption buried below RPE).
     func testPreviousSetBannerUseButtonFillsFields() throws {
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Workouts"].tap()
 
         // Seeded data has two "Pull Day" workouts with a "Barbell Row" exercise;
         // the most recent one (workoutRow-0) has an older one to reference.
         let firstWorkoutRow = app.buttons["workoutRow-0"]
-        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in History")
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
         firstWorkoutRow.tap()
 
         let editWorkoutButton = app.buttons["editWorkoutButton"]

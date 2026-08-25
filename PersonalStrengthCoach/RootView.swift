@@ -14,7 +14,7 @@ struct RootView: View {
         TabView(selection: $selectedTab) {
             HomeView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Today", systemImage: "house.fill") }.tag(0)
             DashboardView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Dashboard", systemImage: "chart.xyaxis.line") }.tag(1)
-            WorkoutHistoryView(workouts: workouts).tabItem { Label("History", systemImage: "clock.arrow.circlepath") }.tag(2)
+            WorkoutsView(workouts: workouts).tabItem { Label("Workouts", systemImage: "dumbbell.fill") }.tag(2)
             RecoveryView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Recovery", systemImage: "heart.fill") }.tag(3)
             CoachView(workouts: workouts, recoveryDays: recoveryDays).tabItem { Label("Coach", systemImage: "sparkles") }.tag(4)
             DataManagementView().tabItem { Label("Settings", systemImage: "gearshape.fill") }.tag(5)
@@ -126,7 +126,7 @@ struct DashboardView: View {
     }
 }
 
-struct WorkoutHistoryView: View {
+struct WorkoutsView: View {
     @Environment(\.modelContext) private var context
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
@@ -179,7 +179,7 @@ struct WorkoutHistoryView: View {
         }
         }
         }
-        .navigationTitle("Workout History")
+        .navigationTitle("Workouts")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
