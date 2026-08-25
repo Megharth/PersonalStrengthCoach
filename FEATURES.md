@@ -54,10 +54,11 @@ Tap an exercise within a workout to view:
 
 **Fixing or Removing a Workout:**
 - **Edit** — Tap a workout, then the pencil in the top-right. You can change the
-  title, date, duration, and every set's weight and reps, and add or remove sets
-  and whole exercises. Saving recomputes volume, PRs, 1RM trends, and readiness
-  immediately — so correcting a mistyped `500` back to `50` also clears the bogus
-  PR it created.
+  title, duration, and every set's weight and reps, and add or remove sets and
+  whole exercises. Weight and rep fields accept direct text entry in the selected
+  unit; values are validated and committed when editing finishes. Saving
+  recomputes volume, PRs, 1RM trends, and readiness immediately — so correcting a
+  mistyped `500` back to `50` also clears the bogus PR it created.
 - **Delete** — Swipe a row in the workout list, or use **Delete Workout** at the
   bottom of a workout's detail screen. Both ask for confirmation first.
 - **There is no undo.** Deleting a workout permanently removes the session and
@@ -132,7 +133,7 @@ Log training sessions with exercise-by-exercise tracking.
 1. From Workouts tab, tap **+** → **Log workout**.
 2. Set workout name and date/time.
 3. Tap **Add exercise** to choose from the library or create a custom exercise.
-4. For each exercise, log sets with weight in your selected kg/lb unit, reps, set type, and optional RPE. Saved values remain canonical kilograms.
+4. For each exercise, log sets with weight in your selected kg/lb unit, reps, set type, and optional RPE. Weight and rep fields use direct text entry and commit validated values when editing finishes. Saved values remain canonical kilograms.
    Set types distinguish warmups, working sets, drop sets, and failure sets. When
    the exercise has prior history, the corresponding sets are prefilled from the
    most recent workout and remain fully editable; prior RPE is never copied.

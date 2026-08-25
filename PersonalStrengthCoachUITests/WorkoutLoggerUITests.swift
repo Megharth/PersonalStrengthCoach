@@ -145,11 +145,10 @@ final class WorkoutLoggerUITests: XCTestCase {
     }
 
     private func replaceText(in field: XCUIElement, with text: String) {
-        field.tap()
-        if let existing = field.value as? String, !existing.isEmpty {
-            let deleteKeys = String(repeating: XCUIKeyboardKey.delete.rawValue, count: existing.count)
-            field.typeText(deleteKeys)
-        }
+        // A double-tap selects the numeric token in SwiftUI's text field. This
+        // avoids relying on the insertion point, which can start at the leading
+        // edge in the simulator and make delete-key replacement prepend digits.
+        field.doubleTap()
         field.typeText(text)
     }
 }

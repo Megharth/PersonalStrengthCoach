@@ -705,15 +705,16 @@ private struct WeightInputField: View {
     let unit: WeightUnit
     var focusedField: FocusState<SetInputField?>.Binding
     let index: Int
+    @State private var text = ""
+    @State private var lastSyncedWeightKg: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Weight").font(.caption).foregroundStyle(.secondary)
             HStack(spacing: 6) {
-                TextField("0", value: Binding(
-                    get: { unit.fromKilograms(weightKg) },
-                    set: { weightKg = max(0, unit.toKilograms($0)) }
-                ), format: .number.precision(.fractionLength(0...2)).grouping(.never))
+                TextField("0", text: $text, onEditingChanged: { isEditing in
+                    if !isEditing { commitWeight() }
+                }, onCommit: commitWeight)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.center)
                 .font(.subheadline.weight(.semibold))
@@ -723,6 +724,19 @@ private struct WeightInputField: View {
                 .frame(maxWidth: .infinity)
                 .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityIdentifier("weightField-\(index)")
+                .onAppear {
+                    text = unit.formatted(weightKg)
+                    lastSyncedWeightKg = weightKg
+                }
+                .onChange(of: weightKg) { _, newValue in
+
+                    // A model change equal to the value just parsed came from this
+                    // field. Other changes (for example, Previous Set's Use button)
+                    // must still refresh the visible text.
+                    guard lastSyncedWeightKg != newValue else { return }
+                    text = unit.formatted(newValue)
+                    lastSyncedWeightKg = newValue
+                }
                 Text(unit.symbol).font(.subheadline).foregroundStyle(.secondary)
             }
         }
@@ -734,14 +748,19 @@ private struct RepsInputField: View {
     @Binding var reps: Int
     var focusedField: FocusState<SetInputField?>.Binding
     let index: Int
+    @State private var text = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Reps").font(.caption).foregroundStyle(.secondary)
-            TextField("0", value: Binding(
-                get: { reps },
-                set: { reps = max(1, $0) }
-            ), format: .number.grouping(.never))
+            TextField("0", text: $text)
+                .onChange(of: text) { _, newText in
+                    if newText.isEmpty {
+                        reps = 1
+                    } else if let value = Int(newText) {
+                        reps = max(1, value)
+                    }
+                }
             .keyboardType(.numberPad)
             .multilineTextAlignment(.center)
             .font(.subheadline.weight(.semibold))
@@ -751,6 +770,12 @@ private struct RepsInputField: View {
             .frame(maxWidth: .infinity)
             .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
             .accessibilityIdentifier("repsField-\(index)")
+            .onAppear { text = String(reps) }
+            .onChange(of: reps) { _, newValue in
+                if Int(text) != newValue {
+                    text = String(newValue)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -780,6 +805,21 @@ private struct RPEStepperControl: View {
     private func decrement() {
         guard let current = rpe else { return }
         rpe = RPEEngine.validated(current - 0.5)
+    }
+}
+
+private extension WeightInputField {
+    func commitWeight() {
+        let newWeightKg: Double
+        if text.isEmpty {
+            newWeightKg = 0
+        } else if let value = Double(text) {
+            newWeightKg = max(0, unit.toKilograms(value))
+        } else {
+            return
+        }
+        lastSyncedWeightKg = newWeightKg
+        weightKg = newWeightKg
     }
 }
 
