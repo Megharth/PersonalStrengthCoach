@@ -80,25 +80,25 @@ enum WorkoutEditorLogic {
     }
 
     /// Rebuilds editable exercise blocks from a workout's unordered `sets`
-    /// relationship. Blocks are keyed on the raw `exercise` string (never
-    /// `normalizedExercise`, which would rename the user's entry), ordered
-    /// alphabetically to match `WorkoutDetailView`, and each block's sets are
-    /// ordered by `setNumber` (tie-broken on weight/reps for determinism).
-    ///
-    /// Two same-name blocks in one workout merge into one: `ExerciseSet` stores no
-    /// intra-workout ordering, so their original segmentation is unrecoverable. Every
-    /// set, weight, and rep survives — only the split is lost, and no analytic reads
-    /// `setNumber`.
+    /// relationship. Blocks remain keyed on the raw `exercise` string (never
+    /// `normalizedExercise`, which would rename the user's entry), and use the
+    /// persisted exercise-block order when available. Legacy rows without an
+    /// order follow a deterministic alphabetical fallback.
     static func editableExercises(from sets: [ExerciseSet]) -> [LoggedExercise] {
         Dictionary(grouping: sets, by: \.exercise)
-            .sorted { $0.key < $1.key }
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.value.compactMap(\.exerciseOrder).min()
+                let rhsOrder = rhs.value.compactMap(\.exerciseOrder).min()
+                switch (lhsOrder, rhsOrder) {
+                case let (left?, right?) where left != right: return left < right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: return lhs.key < rhs.key
+                }
+            }
             .map { name, group in
                 let ordered = group.sorted { ($0.setNumber, $0.weight, $0.reps) < ($1.setNumber, $1.weight, $1.reps) }
-                return LoggedExercise(
-                    name: name,
-                    primaryMuscle: ordered.first?.primaryMuscle ?? .core,
-                    sets: ordered.map(EditableSet.init(model:))
-                )
+                return LoggedExercise(name: name, primaryMuscle: ordered.first?.primaryMuscle ?? .core, sets: ordered.map(EditableSet.init(model:)))
             }
     }
 }
@@ -407,12 +407,13 @@ struct WorkoutLoggerView: View {
         // `exercise`/`normalizedExercise` are deliberately not reassigned on kept
         // rows — editing exercise identity is a non-goal and the UI has no name field.
         var finalSets: [ExerciseSet] = []
-        for exercise in completedExercises {
+        for (exerciseIndex, exercise) in completedExercises.enumerated() {
             for (index, loggedSet) in exercise.sets.enumerated() {
-                let set = loggedSet.existingModel ?? ExerciseSet(exercise: exercise.name, weight: loggedSet.weight, reps: loggedSet.reps, setNumber: index + 1, primaryMuscle: exercise.primaryMuscle)
+                let set = loggedSet.existingModel ?? ExerciseSet(exercise: exercise.name, weight: loggedSet.weight, reps: loggedSet.reps, setNumber: index + 1, exerciseOrder: exerciseIndex, primaryMuscle: exercise.primaryMuscle)
                 set.weight = loggedSet.weight
                 set.reps = loggedSet.reps
                 set.setNumber = index + 1
+                set.exerciseOrder = exerciseIndex
                 set.setTypeRaw = loggedSet.setType.rawValue
                 set.rpe = RPEEngine.validated(loggedSet.rpe)
                 set.workout = targetWorkout

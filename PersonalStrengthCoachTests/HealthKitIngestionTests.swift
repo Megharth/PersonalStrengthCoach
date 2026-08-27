@@ -3,7 +3,7 @@ import XCTest
 @testable import PersonalStrengthCoach
 
 final class HealthKitIngestionTests: XCTestCase {
-    func testAppSchemaV3ContainerBuildsWithMigrationPlan() throws {
+    func testCurrentSchemaContainerBuildsWithMigrationPlan() throws {
         _ = try makeInMemoryContainer()
     }
 
@@ -47,7 +47,7 @@ final class HealthKitIngestionTests: XCTestCase {
 
     func testRecoveryExportIncludesSampleCounts() throws {
         let export = PersonalStrengthExport(
-            schemaVersion: 3,
+            schemaVersion: 6,
             exportedAt: Date(timeIntervalSince1970: 0),
             workouts: [],
             recovery: [RecoveryExport(
@@ -67,7 +67,7 @@ final class HealthKitIngestionTests: XCTestCase {
 
         let data = try JSONEncoder().encode(export)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        XCTAssertEqual(object["schemaVersion"] as? Int, 3)
+        XCTAssertEqual(object["schemaVersion"] as? Int, 6)
         let recovery = try XCTUnwrap((object["recovery"] as? [[String: Any]])?.first)
         XCTAssertEqual(recovery["sleepSampleCount"] as? Int, 3)
         XCTAssertEqual(recovery["hrvSampleCount"] as? Int, 7)
@@ -77,12 +77,12 @@ final class HealthKitIngestionTests: XCTestCase {
 
     // MARK: - File-backed migration
     //
-    // In-memory containers are always created fresh at V3, so the `.lightweight` stages in
-    // AppMigrationPlan never actually run. These tests write a store under the *historical*
-    // schema, close it, then reopen it at V3 through the migration plan — the one scenario
-    // the frozen nested models in AppSchemaV1/V2 exist to keep safe.
+    // In-memory containers are always created fresh at the current schema, so the
+    // `.lightweight` stages in AppMigrationPlan never actually run. These tests write a
+    // store under a *historical* schema, close it, then reopen it at the current schema
+    // through the migration plan — the scenario the frozen schema snapshots exist to keep safe.
 
-    func testStoreCreatedUnderV1MigratesToV3AndPreservesData() throws {
+    func testStoreCreatedUnderV1MigratesToCurrentSchemaAndPreservesData() throws {
         let url = try makeTemporaryStoreURL()
         defer { removeStore(at: url) }
 
@@ -104,7 +104,7 @@ final class HealthKitIngestionTests: XCTestCase {
         }
 
         let migrated = try ModelContainer(
-            for: Schema(AppSchemaV3.models),
+            for: Schema(AppSchemaV6.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(url: url)
         )
@@ -123,7 +123,45 @@ final class HealthKitIngestionTests: XCTestCase {
         XCTAssertEqual(fetched.bodyMassSampleCount, 0)
     }
 
-    func testStoreCreatedUnderV2MigratesToV3AndPreservesRoutines() throws {
+    func testStoreCreatedUnderV5MigratesToCurrentSchemaWithNilExerciseOrder() throws {
+        let url = try makeTemporaryStoreURL()
+        defer { removeStore(at: url) }
+
+        do {
+            let legacy = try ModelContainer(
+                for: Schema(AppSchemaV5.models),
+                configurations: ModelConfiguration(url: url)
+            )
+            let context = ModelContext(legacy)
+            let workout = AppSchemaV5.Workout(title: "Legacy Push", durationMinutes: 45)
+            let set = AppSchemaV5.ExerciseSet(
+                exercise: "Bench Press",
+                normalizedExercise: "Bench Press",
+                weight: 100,
+                reps: 5,
+                setNumber: 1,
+                primaryMuscleRaw: MuscleGroup.chest.rawValue
+            )
+            set.workout = workout
+            workout.sets.append(set)
+            context.insert(workout)
+            try context.save()
+        }
+
+        let migrated = try ModelContainer(
+            for: Schema(AppSchemaV6.models),
+            migrationPlan: AppMigrationPlan.self,
+            configurations: ModelConfiguration(url: url)
+        )
+        let context = ModelContext(migrated)
+        let workout = try XCTUnwrap(context.fetch(FetchDescriptor<Workout>()).first)
+        let set = try XCTUnwrap(workout.sets.first)
+
+        XCTAssertEqual(set.exercise, "Bench Press")
+        XCTAssertNil(set.exerciseOrder)
+    }
+
+    func testStoreCreatedUnderV2MigratesToCurrentSchemaAndPreservesRoutines() throws {
         let url = try makeTemporaryStoreURL()
         defer { removeStore(at: url) }
 
@@ -149,7 +187,7 @@ final class HealthKitIngestionTests: XCTestCase {
         }
 
         let migrated = try ModelContainer(
-            for: Schema(AppSchemaV3.models),
+            for: Schema(AppSchemaV6.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(url: url)
         )
@@ -174,7 +212,7 @@ final class HealthKitIngestionTests: XCTestCase {
 
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV3.models),
+            for: Schema(AppSchemaV6.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )

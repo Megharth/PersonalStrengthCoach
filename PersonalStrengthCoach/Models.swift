@@ -46,14 +46,15 @@ final class ExerciseSet {
     var weight: Double
     var reps: Int
     var setNumber: Int
+    var exerciseOrder: Int?
     var primaryMuscleRaw: String
     var setTypeRaw: String = SetType.working.rawValue
     var rpe: Double?
     var workout: Workout?
 
-    init(exercise: String, normalizedExercise: String? = nil, weight: Double, reps: Int, setNumber: Int, primaryMuscle: MuscleGroup, setType: SetType = .working, rpe: Double? = nil) {
+    init(exercise: String, normalizedExercise: String? = nil, weight: Double, reps: Int, setNumber: Int, exerciseOrder: Int? = nil, primaryMuscle: MuscleGroup, setType: SetType = .working, rpe: Double? = nil) {
         self.exercise = exercise; self.normalizedExercise = normalizedExercise ?? ExerciseCatalog.normalize(exercise)
-        self.weight = weight; self.reps = reps; self.setNumber = setNumber; self.primaryMuscleRaw = primaryMuscle.rawValue
+        self.weight = weight; self.reps = reps; self.setNumber = setNumber; self.exerciseOrder = exerciseOrder; self.primaryMuscleRaw = primaryMuscle.rawValue
         self.setTypeRaw = setType.rawValue; self.rpe = rpe
     }
     var primaryMuscle: MuscleGroup { MuscleGroup(rawValue: primaryMuscleRaw) ?? .core }

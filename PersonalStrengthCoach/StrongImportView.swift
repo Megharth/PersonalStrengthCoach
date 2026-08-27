@@ -120,9 +120,20 @@ struct StrongImportView: View {
                 }
                 let workout = Workout(date: imported.date, title: imported.title, durationMinutes: imported.durationMinutes)
                 context.insert(workout)
-                for (index, importedSet) in imported.sets.enumerated() {
+                var exerciseOrders: [String: Int] = [:]
+                var nextExerciseOrder = 0
+                var setNumbers: [String: Int] = [:]
+                for importedSet in imported.sets {
+                    let identity = ExerciseCatalog.normalize(importedSet.exercise)
+                    let exerciseOrder = exerciseOrders[identity] ?? {
+                        defer { nextExerciseOrder += 1 }
+                        exerciseOrders[identity] = nextExerciseOrder
+                        return nextExerciseOrder
+                    }()
+                    let setNumber = (setNumbers[identity] ?? 0) + 1
+                    setNumbers[identity] = setNumber
                     let muscle = ExerciseCatalog.muscles(for: importedSet.exercise).first ?? .core
-                    let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: index + 1, primaryMuscle: muscle, setType: importedSet.setType, rpe: importedSet.rpe)
+                    let set = ExerciseSet(exercise: importedSet.exercise, weight: importedSet.weight, reps: importedSet.reps, setNumber: setNumber, exerciseOrder: exerciseOrder, primaryMuscle: muscle, setType: importedSet.setType, rpe: importedSet.rpe)
                     set.workout = workout
                     context.insert(set)
                 }

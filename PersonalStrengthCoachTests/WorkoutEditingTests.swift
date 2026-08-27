@@ -5,8 +5,8 @@ import SwiftData
 // MARK: - Group A: pure editor logic (no ModelContainer)
 
 final class WorkoutEditorLogicTests: XCTestCase {
-    private func makeSet(_ exercise: String, weight: Double, reps: Int, setNumber: Int, muscle: MuscleGroup = .chest) -> ExerciseSet {
-        ExerciseSet(exercise: exercise, weight: weight, reps: reps, setNumber: setNumber, primaryMuscle: muscle)
+    private func makeSet(_ exercise: String, weight: Double, reps: Int, setNumber: Int, exerciseOrder: Int? = nil, muscle: MuscleGroup = .chest) -> ExerciseSet {
+        ExerciseSet(exercise: exercise, weight: weight, reps: reps, setNumber: setNumber, exerciseOrder: exerciseOrder, primaryMuscle: muscle)
     }
 
     private func makeWorkout(sets: [ExerciseSet]) -> Workout {
@@ -72,6 +72,28 @@ final class WorkoutEditorLogicTests: XCTestCase {
         XCTAssertTrue(drafts[0].sets[0].existingModel === set)
         XCTAssertEqual(drafts[0].sets[0].weight, 80)
         XCTAssertEqual(drafts[0].sets[0].reps, 6)
+    }
+
+    func testEditableExercisesUsesPersistedExerciseOrder() {
+        let workout = makeWorkout(sets: [
+            makeSet("Squat", weight: 140, reps: 5, setNumber: 1, exerciseOrder: 0, muscle: .quads),
+            makeSet("Bench Press", weight: 100, reps: 5, setNumber: 2, exerciseOrder: 1)
+        ])
+
+        let drafts = LoggedExercise.draftExercises(from: workout)
+
+        XCTAssertEqual(drafts.map(\.name), ["Squat", "Bench Press"])
+    }
+
+    func testEditableExercisesFallsBackToAlphabeticalOrderForLegacySets() {
+        let workout = makeWorkout(sets: [
+            makeSet("Squat", weight: 140, reps: 5, setNumber: 1),
+            makeSet("Bench Press", weight: 100, reps: 5, setNumber: 2)
+        ])
+
+        let drafts = LoggedExercise.draftExercises(from: workout)
+
+        XCTAssertEqual(drafts.map(\.name), ["Bench Press", "Squat"])
     }
 
     func testEditableExercisesHandlesContinuousSetNumberingAcrossExercises() {
@@ -149,6 +171,40 @@ final class WorkoutSharingTests: XCTestCase {
         XCTAssertLessThan(text.range(of: "Set 1")!.lowerBound, text.range(of: "Set 2")!.lowerBound)
     }
 
+    func testSummaryUsesPersistedExerciseOrderBeforeAlphabeticalFallback() {
+        let text = WorkoutShareFormatter.summary(
+            title: "Legs",
+            date: date,
+            durationMinutes: 40,
+            calories: 0,
+            volumeKg: 1_000,
+            sets: [
+                WorkoutShareSet(exercise: "Squat", normalizedExercise: "Squat", weight: 100, reps: 5, setNumber: 1, exerciseOrder: 0, setType: .working, rpe: nil),
+                WorkoutShareSet(exercise: "Bench Press", normalizedExercise: "Bench Press", weight: 80, reps: 5, setNumber: 1, exerciseOrder: 1, setType: .working, rpe: nil)
+            ],
+            weightUnit: .kilograms
+        )
+
+        XCTAssertLessThan(text.range(of: "Squat")!.lowerBound, text.range(of: "Bench Press")!.lowerBound)
+    }
+
+    func testSummaryFallsBackToAlphabeticalExerciseOrderForLegacySets() {
+        let text = WorkoutShareFormatter.summary(
+            title: "Legacy",
+            date: date,
+            durationMinutes: 40,
+            calories: 0,
+            volumeKg: 1_000,
+            sets: [
+                WorkoutShareSet(exercise: "Squat", normalizedExercise: "Squat", weight: 100, reps: 5, setNumber: 1, setType: .working, rpe: nil),
+                WorkoutShareSet(exercise: "Bench Press", normalizedExercise: "Bench Press", weight: 80, reps: 5, setNumber: 1, setType: .working, rpe: nil)
+            ],
+            weightUnit: .kilograms
+        )
+
+        XCTAssertLessThan(text.range(of: "Bench Press")!.lowerBound, text.range(of: "Squat")!.lowerBound)
+    }
+
     func testSummaryConvertsWeightsAndVolumeToPounds() {
         let text = WorkoutShareFormatter.summary(
             title: "Pull Day",
@@ -171,7 +227,7 @@ final class WorkoutSharingTests: XCTestCase {
 final class WorkoutEditingPersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV5.models),
+            for: Schema(AppSchemaV6.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )

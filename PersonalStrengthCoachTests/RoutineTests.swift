@@ -20,6 +20,7 @@ final class RoutineEngineBuildWorkoutTests: XCTestCase {
         let workout = RoutineEngine.buildWorkout(from: routine)
 
         XCTAssertEqual(workout.sets.map(\.exercise), ["Bench Press", "Incline Press", "Overhead Press"])
+        XCTAssertEqual(workout.sets.map(\.exerciseOrder), [0, 1, 2])
     }
 
     func testBuildWorkoutGeneratesOneSetPerTargetSetWithSequentialSetNumbers() {
@@ -84,6 +85,8 @@ final class RoutineEngineBuildWorkoutTests: XCTestCase {
         XCTAssertEqual(secondEntrySets.map(\.setNumber), [1, 2, 3])
         XCTAssertTrue(firstEntrySets.allSatisfy { $0.exercise == "Bench Press" })
         XCTAssertTrue(secondEntrySets.allSatisfy { $0.exercise == "Bench Press" })
+        XCTAssertEqual(firstEntrySets.map(\.exerciseOrder), [0, 0])
+        XCTAssertEqual(secondEntrySets.map(\.exerciseOrder), [1, 1, 1])
     }
 
     func testBuildWorkoutSetsWorkoutTitleFromRoutineName() {
@@ -143,13 +146,13 @@ final class RoutineEngineBuildWorkoutTests: XCTestCase {
 final class RoutinePersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV3.models),
+            for: Schema(AppSchemaV6.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
     }
 
-    func testAppSchemaV3ContainerBuildsWithMigrationPlan() throws {
+    func testCurrentSchemaContainerBuildsWithMigrationPlan() throws {
         // The migration plan must resolve and a container must construct without throwing.
         let container = try makeInMemoryContainer()
 
@@ -157,9 +160,9 @@ final class RoutinePersistenceTests: XCTestCase {
     }
 
     func testCurrentSchemaIncludesTopLevelRoutineAndRoutineExerciseModels() {
-        let v3Types = Set(AppSchemaV3.models.map { ObjectIdentifier($0) })
-        XCTAssertTrue(v3Types.contains(ObjectIdentifier(Routine.self)))
-        XCTAssertTrue(v3Types.contains(ObjectIdentifier(RoutineExercise.self)))
+        let currentTypes = Set(AppSchemaV6.models.map { ObjectIdentifier($0) })
+        XCTAssertTrue(currentTypes.contains(ObjectIdentifier(Routine.self)))
+        XCTAssertTrue(currentTypes.contains(ObjectIdentifier(RoutineExercise.self)))
 
         // AppSchemaV1 is the historical anchor and must not be edited to include routine models.
         let v1Names = Set(AppSchemaV1.models.map { String(describing: $0) })

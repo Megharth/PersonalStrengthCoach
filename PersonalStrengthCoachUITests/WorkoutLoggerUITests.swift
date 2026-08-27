@@ -152,6 +152,37 @@ final class WorkoutLoggerUITests: XCTestCase {
         assertNoDateField()
     }
 
+    /// Regression coverage for persisted exercise-block order: add exercises in
+    /// a deliberately non-alphabetical order, save, then verify both the detail
+    /// view and edit logger reconstruct the same order.
+    func testWorkoutPreservesExerciseEntryOrderThroughDetailAndEdit() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        addExercise(named: "Overhead Press")
+        markNewestSetComplete()
+        addExercise(named: "Barbell Bench Press")
+        markNewestSetComplete()
+        app.buttons["Save"].tap()
+
+        let newestWorkout = app.buttons["workoutRow-0"]
+        XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5), "Expected the newly saved workout to be first in the list")
+        newestWorkout.tap()
+
+        assertVerticalOrder(first: "Overhead Press", second: "Bench Press")
+
+        let editWorkoutButton = app.buttons["editWorkoutButton"]
+        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
+        editWorkoutButton.tap()
+        assertVerticalOrder(first: "Overhead Press", second: "Barbell Bench Press")
+    }
+
     /// Regression coverage for the workout detail share action. The system share
     /// sheet's available destinations vary by simulator, so assert only that
     /// ShareLink presents a system activity view after the tap.
@@ -205,6 +236,44 @@ final class WorkoutLoggerUITests: XCTestCase {
         XCTAssertEqual(repsField.value as? String, "8", "Expected Use to copy the previous session's reps into the field")
     }
 
+    private func addExercise(named name: String) {
+        scrollUntilExists(app.buttons["addExerciseButton"])
+        app.buttons["addExerciseButton"].tap()
+
+        // Picker options remain in the accessibility tree even while clipped
+        // below the sheet viewport, which can make a direct tap a no-op.
+        // Search narrows the list to one visible, selectable result instead.
+        let searchField = app.searchFields["Search exercises"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 5), "Expected the exercise picker search field")
+        searchField.tap()
+        searchField.typeText(name)
+
+        let exerciseButton = app.buttons[name]
+        XCTAssertTrue(exerciseButton.waitForExistence(timeout: 5), "Expected exercise picker option \(name)")
+        XCTAssertTrue(exerciseButton.isHittable, "Expected exercise picker option \(name) to be hittable")
+        exerciseButton.tap()
+
+        XCTAssertTrue(
+            app.navigationBars["Add Exercise"].waitForNonExistence(timeout: 5),
+            "Expected the exercise picker to dismiss after selecting \(name)"
+        )
+        XCTAssertTrue(app.buttons["markCompleteButton-0"].waitForExistence(timeout: 5), "Expected added exercise \(name)'s first set")
+    }
+
+    private func markNewestSetComplete() {
+        let completeButton = app.buttons["markCompleteButton-0"]
+        XCTAssertTrue(completeButton.waitForExistence(timeout: 5), "Expected the newly added exercise's first set")
+        completeButton.tap()
+    }
+
+    private func assertVerticalOrder(first: String, second: String) {
+        let firstHeader = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", first)).firstMatch
+        let secondHeader = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", second)).firstMatch
+        XCTAssertTrue(firstHeader.waitForExistence(timeout: 5), "Expected exercise header \(first)")
+        XCTAssertTrue(secondHeader.waitForExistence(timeout: 5), "Expected exercise header \(second)")
+        XCTAssertLessThan(firstHeader.frame.minY, secondHeader.frame.minY, "Expected \(first) to remain above \(second)")
+    }
+
     private func assertNoDateField() {
         XCTAssertEqual(app.datePickers.count, 0, "The workout logger should not expose a date picker")
         let dateLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Date")).firstMatch
@@ -213,19 +282,12 @@ final class WorkoutLoggerUITests: XCTestCase {
 
     private func scrollUntilExists(_ element: XCUIElement, maxSwipes: Int = 15) {
         var attempts = 0
-        while !element.exists && attempts < maxSwipes {
+        while (!element.exists || !element.isHittable) && attempts < maxSwipes {
             scrollListUp()
             attempts += 1
         }
         XCTAssertTrue(element.waitForExistence(timeout: 2), "Expected scrolling to bring the element into view")
-
-        // The list may still be decelerating/rubber-banding right after the
-        // last swipe, which leaves a transient non-hittable frame; poll
-        // briefly for it to settle before the caller taps it.
-        let deadline = Date().addingTimeInterval(2)
-        while !element.isHittable && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.1)
-        }
+        XCTAssertTrue(element.isHittable, "Expected scrolling to make the element hittable")
     }
 
     /// The dock position can read a stale/mid-animation value for a moment

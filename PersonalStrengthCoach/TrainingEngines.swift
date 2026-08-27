@@ -51,8 +51,20 @@ struct WorkoutShareSet {
     let weight: Double
     let reps: Int
     let setNumber: Int
+    let exerciseOrder: Int?
     let setType: SetType
     let rpe: Double?
+
+    init(exercise: String, normalizedExercise: String, weight: Double, reps: Int, setNumber: Int, exerciseOrder: Int? = nil, setType: SetType, rpe: Double?) {
+        self.exercise = exercise
+        self.normalizedExercise = normalizedExercise
+        self.weight = weight
+        self.reps = reps
+        self.setNumber = setNumber
+        self.exerciseOrder = exerciseOrder
+        self.setType = setType
+        self.rpe = rpe
+    }
 }
 
 enum WorkoutShareFormatter {
@@ -74,7 +86,17 @@ enum WorkoutShareFormatter {
         ]
 
         let groups = Dictionary(grouping: sets, by: \.normalizedExercise)
-            .sorted { $0.key < $1.key }
+            .map { (name: $0.key, sets: $0.value) }
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.sets.compactMap(\.exerciseOrder).min()
+                let rhsOrder = rhs.sets.compactMap(\.exerciseOrder).min()
+                switch (lhsOrder, rhsOrder) {
+                case let (left?, right?) where left != right: return left < right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: return lhs.name < rhs.name
+                }
+            }
         for (_, exerciseSets) in groups {
             guard let first = exerciseSets.first else { continue }
             lines.append(first.exercise)
@@ -311,7 +333,7 @@ enum RoutineEngine {
     static func buildWorkout(from routine: Routine, date: Date = .now) -> Workout {
         let workout = Workout(date: date, title: routine.name, durationMinutes: 0)
         let orderedExercises = routine.exercises.sorted { $0.order < $1.order }
-        for routineExercise in orderedExercises {
+        for (exerciseIndex, routineExercise) in orderedExercises.enumerated() {
             let setCount = max(1, routineExercise.targetSets)
             for setNumber in 1...setCount {
                 let set = ExerciseSet(
@@ -320,6 +342,7 @@ enum RoutineEngine {
                     weight: routineExercise.targetWeight ?? 0,
                     reps: routineExercise.targetReps,
                     setNumber: setNumber,
+                    exerciseOrder: exerciseIndex,
                     primaryMuscle: routineExercise.primaryMuscle
                 )
                 set.workout = workout

@@ -14,7 +14,7 @@ enum SeedData {
     }
     private static func makeWorkout(daysAgo: Int, title: String, sets: [(String, Double, Int, MuscleGroup)]) -> Workout {
         let workout = Workout(date: Calendar.current.date(byAdding: .day, value: -daysAgo, to: .now)!, title: title, durationMinutes: 68, calories: 410)
-        workout.sets = sets.enumerated().flatMap { index, value in (1...3).map { number in ExerciseSet(exercise: value.0, weight: value.1, reps: value.2 - (number == 3 ? 1 : 0), setNumber: index * 3 + number, primaryMuscle: value.3) } }
+        workout.sets = sets.enumerated().flatMap { index, value in (1...3).map { number in ExerciseSet(exercise: value.0, weight: value.1, reps: value.2 - (number == 3 ? 1 : 0), setNumber: index * 3 + number, exerciseOrder: index, primaryMuscle: value.3) } }
         return workout
     }
 }

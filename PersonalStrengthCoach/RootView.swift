@@ -250,6 +250,20 @@ struct WorkoutDetailView: View {
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let workout: Workout; let history: [Workout]
+    private var orderedSets: [ExerciseSet] {
+        workout.sets.sorted { lhs, rhs in
+            let lhsOrder = lhs.exerciseOrder
+            let rhsOrder = rhs.exerciseOrder
+            switch (lhsOrder, rhsOrder) {
+            case let (left?, right?) where left != right: return left < right
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default:
+                return (lhs.normalizedExercise, lhs.setNumber, lhs.weight, lhs.reps) < (rhs.normalizedExercise, rhs.setNumber, rhs.weight, rhs.reps)
+            }
+        }
+    }
+
     private var shareText: String {
         WorkoutShareFormatter.summary(
             title: workout.title,
@@ -257,13 +271,14 @@ struct WorkoutDetailView: View {
             durationMinutes: workout.durationMinutes,
             calories: workout.calories,
             volumeKg: workout.volume,
-            sets: workout.sets.map {
+            sets: orderedSets.map {
                 WorkoutShareSet(
                     exercise: $0.exercise,
                     normalizedExercise: $0.normalizedExercise,
                     weight: $0.weight,
                     reps: $0.reps,
                     setNumber: $0.setNumber,
+                    exerciseOrder: $0.exerciseOrder,
                     setType: $0.setType,
                     rpe: $0.rpe
                 )
@@ -279,7 +294,16 @@ struct WorkoutDetailView: View {
     private var groupedExercises: [(name: String, sets: [ExerciseSet])] {
         Dictionary(grouping: workout.sets, by: \.normalizedExercise)
             .map { (name: $0.key, sets: $0.value) }
-            .sorted { $0.name < $1.name }
+            .sorted { lhs, rhs in
+                let lhsOrder = lhs.sets.compactMap(\.exerciseOrder).min()
+                let rhsOrder = rhs.sets.compactMap(\.exerciseOrder).min()
+                switch (lhsOrder, rhsOrder) {
+                case let (left?, right?) where left != right: return left < right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: return lhs.name < rhs.name
+                }
+            }
     }
     var body: some View { List {
         Section("Session") { LabeledContent("Volume", value: weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0)); LabeledContent("Duration", value: "\(workout.durationMinutes) min"); LabeledContent("Calories", value: "\(workout.calories) kcal") }
