@@ -121,6 +121,51 @@ final class WorkoutEditorLogicTests: XCTestCase {
     }
 }
 
+final class WorkoutSharingTests: XCTestCase {
+    private let date = Date(timeIntervalSince1970: 1_700_000_000)
+
+    func testSummaryIncludesSessionDetailsSetsMetadataAndNotes() {
+        let text = WorkoutShareFormatter.summary(
+            title: "Push Day",
+            date: date,
+            durationMinutes: 45,
+            calories: 320,
+            volumeKg: 1_200,
+            sets: [
+                WorkoutShareSet(exercise: "Bench Press", normalizedExercise: "Bench Press", weight: 100, reps: 5, setNumber: 2, setType: .failure, rpe: 9.5),
+                WorkoutShareSet(exercise: "Bench Press", normalizedExercise: "Bench Press", weight: 20, reps: 10, setNumber: 1, setType: .warmup, rpe: nil)
+            ],
+            weightUnit: .kilograms,
+            notes: "Felt strong"
+        )
+
+        XCTAssertTrue(text.contains("Push Day"))
+        XCTAssertTrue(text.contains("Duration: 45 min"))
+        XCTAssertTrue(text.contains("Volume: 1200 kg"))
+        XCTAssertTrue(text.contains("Calories: 320 kcal"))
+        XCTAssertTrue(text.contains("Set 1: 20 kg × 10 · Warmup"))
+        XCTAssertTrue(text.contains("Set 2: 100 kg × 5 · Failure · RPE 9.5"))
+        XCTAssertTrue(text.contains("Notes: Felt strong"))
+        XCTAssertLessThan(text.range(of: "Set 1")!.lowerBound, text.range(of: "Set 2")!.lowerBound)
+    }
+
+    func testSummaryConvertsWeightsAndVolumeToPounds() {
+        let text = WorkoutShareFormatter.summary(
+            title: "Pull Day",
+            date: date,
+            durationMinutes: 30,
+            calories: 200,
+            volumeKg: 45.359237,
+            sets: [WorkoutShareSet(exercise: "Row", normalizedExercise: "Row", weight: 45.359237, reps: 1, setNumber: 1, setType: .working, rpe: nil)],
+            weightUnit: .pounds
+        )
+
+        XCTAssertTrue(text.contains("Volume: 100 lb"))
+        XCTAssertTrue(text.contains("Set 1: 100 lb × 1"))
+        XCTAssertFalse(text.contains("Notes:"))
+    }
+}
+
 // MARK: - Group B: SwiftData in-memory container persistence
 
 final class WorkoutEditingPersistenceTests: XCTestCase {

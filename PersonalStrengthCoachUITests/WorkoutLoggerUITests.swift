@@ -70,6 +70,55 @@ final class WorkoutLoggerUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "statStripCell-Rest").firstMatch.exists)
     }
 
+    /// Regression coverage for the Option A "sticky top bar" fix: once the
+    /// exercise list is long enough to scroll, the stats strip must stay
+    /// docked under the nav bar (fixed position) instead of scrolling away
+    /// with the exercise cards beneath it.
+    func testSessionStatsStripStaysDockedWhileScrolling() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        let statsStrip = app.otherElements["sessionStatsStrip"]
+        XCTAssertTrue(statsStrip.waitForExistence(timeout: 5))
+
+        let exerciseNames = [
+            "Barbell Bench Press", "Incline Dumbbell Press", "Cable Fly", "Overhead Press"
+        ]
+        for name in exerciseNames {
+            // Each added exercise's first set defaults to expanded, so the list
+            // quickly grows taller than one screen -- scroll "Add exercise" back
+            // into view (it's virtualized out of the accessibility tree, not just
+            // offscreen, once it's far enough below the fold) before tapping it.
+            scrollUntilExists(app.buttons["addExerciseButton"])
+            app.buttons["addExerciseButton"].tap()
+            let exerciseButton = app.buttons[name]
+            XCTAssertTrue(exerciseButton.waitForExistence(timeout: 5))
+            exerciseButton.tap()
+        }
+
+        // Baseline position once the list is actually scrollable (a List's
+        // top inset can shift a few points between "fits on screen" and
+        // "needs to scroll"), captured before scrolling so it isn't
+        // conflated with the empty-list layout at the top of this test.
+        let dockedMinY = waitForStableMinY(of: statsStrip)
+
+        // SwiftUI may not bridge the Section header's Text as a .staticText
+        // element kind, so match by label across any element type (same
+        // reasoning as the stat-strip cells above).
+        let lastExerciseHeader = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", exerciseNames.last!)).firstMatch
+        scrollUntilExists(lastExerciseHeader)
+
+        XCTAssertTrue(statsStrip.exists, "Expected the stats strip to remain docked rather than scroll away once the exercise list is long enough to scroll")
+        XCTAssertEqual(waitForStableMinY(of: statsStrip), dockedMinY, accuracy: 1.0, "Expected the docked stats strip to stay pinned at the same position while the list beneath it scrolls")
+    }
+
     /// Regression coverage for removing the manual workout date field: the
     /// logger infers date/time from the session's start and end instead of
     /// letting the user pick one, on both the new-workout and edit-workout
@@ -101,6 +150,24 @@ final class WorkoutLoggerUITests: XCTestCase {
 
         XCTAssertTrue(app.textFields["Workout name"].waitForExistence(timeout: 5), "Expected the edit-workout logger to appear")
         assertNoDateField()
+    }
+
+    /// Regression coverage for the workout detail share action. The system share
+    /// sheet's available destinations vary by simulator, so assert only that
+    /// ShareLink presents a system activity view after the tap.
+    func testWorkoutDetailShowsAndPresentsShareAction() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let firstWorkoutRow = app.buttons["workoutRow-0"]
+        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
+        firstWorkoutRow.tap()
+
+        let shareWorkoutButton = app.buttons["shareWorkoutButton"]
+        XCTAssertTrue(shareWorkoutButton.waitForExistence(timeout: 5), "Expected the workout detail share action")
+        shareWorkoutButton.tap()
+
+        let shareSheet = app.otherElements["ActivityListView"]
+        XCTAssertTrue(shareSheet.waitForExistence(timeout: 5), "Expected ShareLink to present the system share sheet")
     }
 
     /// Regression coverage for the "Last time" reference banner: editing a set
@@ -142,6 +209,49 @@ final class WorkoutLoggerUITests: XCTestCase {
         XCTAssertEqual(app.datePickers.count, 0, "The workout logger should not expose a date picker")
         let dateLabel = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Date")).firstMatch
         XCTAssertFalse(dateLabel.exists, "The workout logger should not show a standalone Date field")
+    }
+
+    private func scrollUntilExists(_ element: XCUIElement, maxSwipes: Int = 15) {
+        var attempts = 0
+        while !element.exists && attempts < maxSwipes {
+            scrollListUp()
+            attempts += 1
+        }
+        XCTAssertTrue(element.waitForExistence(timeout: 2), "Expected scrolling to bring the element into view")
+
+        // The list may still be decelerating/rubber-banding right after the
+        // last swipe, which leaves a transient non-hittable frame; poll
+        // briefly for it to settle before the caller taps it.
+        let deadline = Date().addingTimeInterval(2)
+        while !element.isHittable && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
+    /// The dock position can read a stale/mid-animation value for a moment
+    /// right after a sheet dismiss or list insert settles; poll until two
+    /// consecutive reads agree before trusting it.
+    private func waitForStableMinY(of element: XCUIElement, maxAttempts: Int = 10) -> CGFloat {
+        var lastValue = element.frame.minY
+        for _ in 0..<maxAttempts {
+            Thread.sleep(forTimeInterval: 0.2)
+            let value = element.frame.minY
+            if abs(value - lastValue) < 0.5 {
+                return value
+            }
+            lastValue = value
+        }
+        return lastValue
+    }
+
+    /// A plain `app.swipeUp()` drags from very close to the bottom edge,
+    /// which on a presented sheet can be interpreted as the interactive
+    /// swipe-to-dismiss gesture instead of a list scroll. Keep both
+    /// endpoints well clear of the edges so it always scrolls the List.
+    private func scrollListUp() {
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+        start.press(forDuration: 0.05, thenDragTo: end)
     }
 
     private func replaceText(in field: XCUIElement, with text: String) {

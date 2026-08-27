@@ -40,7 +40,61 @@ enum WeightUnit: String, CaseIterable, Codable, Identifiable {
 
 private extension String {
     func trimmingTrailingZeros() -> String {
-        replacingOccurrences(of: "\\.?0+$", with: "", options: .regularExpression)
+        guard contains(".") else { return self }
+        return trimmingCharacters(in: CharacterSet(charactersIn: "0")).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+    }
+}
+
+struct WorkoutShareSet {
+    let exercise: String
+    let normalizedExercise: String
+    let weight: Double
+    let reps: Int
+    let setNumber: Int
+    let setType: SetType
+    let rpe: Double?
+}
+
+enum WorkoutShareFormatter {
+    static func summary(
+        title: String,
+        date: Date,
+        durationMinutes: Int,
+        calories: Int,
+        volumeKg: Double,
+        sets: [WorkoutShareSet],
+        weightUnit: WeightUnit,
+        notes: String = ""
+    ) -> String {
+        var lines = [
+            title,
+            date.formatted(date: .abbreviated, time: .shortened),
+            "Duration: \(durationMinutes) min · Volume: \(weightUnit.formattedWithUnit(volumeKg, fractionDigits: 0)) · Calories: \(calories) kcal",
+            ""
+        ]
+
+        let groups = Dictionary(grouping: sets, by: \.normalizedExercise)
+            .sorted { $0.key < $1.key }
+        for (_, exerciseSets) in groups {
+            guard let first = exerciseSets.first else { continue }
+            lines.append(first.exercise)
+            let orderedSets = exerciseSets.sorted {
+                if $0.setNumber != $1.setNumber { return $0.setNumber < $1.setNumber }
+                if $0.weight != $1.weight { return $0.weight < $1.weight }
+                return $0.reps < $1.reps
+            }
+            for set in orderedSets {
+                var details = "  Set \(set.setNumber): \(weightUnit.formatted(set.weight)) \(weightUnit.symbol) × \(set.reps)"
+                if set.setType != .working { details += " · \(set.setType.rawValue)" }
+                if let rpe = set.rpe { details += " · RPE \(String(format: "%.1f", rpe))" }
+                lines.append(details)
+            }
+            lines.append("")
+        }
+
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedNotes.isEmpty { lines.append("Notes: \(trimmedNotes)") }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

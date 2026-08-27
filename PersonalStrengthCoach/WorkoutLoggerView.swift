@@ -176,18 +176,24 @@ struct WorkoutLoggerView: View {
                         Label("Add exercise", systemImage: "plus.circle.fill")
                             .fontWeight(.semibold)
                     }
+                    .accessibilityIdentifier("addExerciseButton")
                 }
-
+            }
+            // Docked via safeAreaInset rather than a trailing List section: a
+            // stat a set is actively being logged against (Rest, above all)
+            // needs to stay visible regardless of scroll position or which
+            // set row is expanded, not scroll away below the exercise list.
+            .safeAreaInset(edge: .top) {
                 if !isEditing {
-                    Section("Session") {
-                        SessionStatsStrip(
-                            volume: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0),
-                            elapsed: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min",
-                            rest: WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now).flatMap { $0 > 0 ? "\($0 / 60):\(String(format: "%02d", $0 % 60))" : nil }
-                        )
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                    }
+                    SessionStatsStrip(
+                        volume: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0),
+                        elapsed: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min",
+                        rest: WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now).flatMap { $0 > 0 ? "\($0 / 60):\(String(format: "%02d", $0 % 60))" : nil }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.bar)
+                    .overlay(alignment: .bottom) { Divider() }
                 }
             }
             .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")

@@ -250,6 +250,28 @@ struct WorkoutDetailView: View {
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let workout: Workout; let history: [Workout]
+    private var shareText: String {
+        WorkoutShareFormatter.summary(
+            title: workout.title,
+            date: workout.date,
+            durationMinutes: workout.durationMinutes,
+            calories: workout.calories,
+            volumeKg: workout.volume,
+            sets: workout.sets.map {
+                WorkoutShareSet(
+                    exercise: $0.exercise,
+                    normalizedExercise: $0.normalizedExercise,
+                    weight: $0.weight,
+                    reps: $0.reps,
+                    setNumber: $0.setNumber,
+                    setType: $0.setType,
+                    rpe: $0.rpe
+                )
+            },
+            weightUnit: weightUnit,
+            notes: workout.notes
+        )
+    }
     @State private var showingEditor = false
     @State private var showingDeleteConfirmation = false
     @State private var deleteError: String?
@@ -283,7 +305,11 @@ struct WorkoutDetailView: View {
     }
     .navigationTitle(workout.title).navigationBarTitleDisplayMode(.inline)
     .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            ShareLink(item: shareText) {
+                Label("Share Workout", systemImage: "square.and.arrow.up")
+            }
+            .accessibilityIdentifier("shareWorkoutButton")
             Button { showingEditor = true } label: { Label("Edit Workout", systemImage: "pencil") }
                 .accessibilityIdentifier("editWorkoutButton")
         }

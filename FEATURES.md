@@ -44,6 +44,7 @@ Tap any workout to see:
 - **Exercises performed** — Grouped by exercise name with set count and volume per movement.
 - **Personal Records** — Highlighted PRs achieved in that session (e.g., "Bench Press — heaviest set" or "Squat — most reps at weight").
 - **Coach Notes** — Contextual feedback on the session (high volume, PR achieved, general encouragement).
+- **Share Workout** — Tap the share icon in the top-right to create a plain-text summary with session stats, exercises, set details, set types, optional RPE, and notes. Weights and total volume use the selected kg/lb display unit. This is separate from the full JSON data export in Settings.
 
 **Exercise Deep Dive:**
 Tap an exercise within a workout to view:
