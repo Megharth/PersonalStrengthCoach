@@ -275,6 +275,41 @@ enum PerformanceEngine {
     }
 }
 
+enum WorkoutRecapEngine {
+    /// Returns the strongest non-warmup set by estimated 1RM. For bodyweight
+    /// exercises, whose stored weight is zero, the highest-rep eligible set is
+    /// the most useful summary instead.
+    static func bestSet(in sets: [ExerciseSet]) -> ExerciseSet? {
+        let eligible = sets.filter { $0.setType != .warmup && $0.reps > 0 }
+        guard !eligible.isEmpty else { return nil }
+
+        let weightedSets = eligible.filter { $0.weight > 0 && $0.estimated1RM.isFinite }
+        if let best = weightedSets.max(by: { lhs, rhs in
+            if lhs.estimated1RM != rhs.estimated1RM { return lhs.estimated1RM < rhs.estimated1RM }
+            if lhs.weight != rhs.weight { return lhs.weight < rhs.weight }
+            return lhs.setNumber > rhs.setNumber
+        }) {
+            return best
+        }
+
+        return eligible.max(by: { lhs, rhs in
+            if lhs.reps != rhs.reps { return lhs.reps < rhs.reps }
+            return lhs.setNumber > rhs.setNumber
+        })
+    }
+
+    static func coachSummary(records: [String], volumeKg: Double, setCount: Int, weightUnit: WeightUnit) -> (title: String, detail: String) {
+        if !records.isEmpty {
+            let recordSummary = records.count == 1 ? "1 personal record" : "\(records.count) personal records"
+            return ("Strong session", "You set \(recordSummary): \(records.joined(separator: ", ")).")
+        }
+        if volumeKg >= 8_000 {
+            return ("High-volume work", "You completed \(weightUnit.formattedWithUnit(volumeKg, fractionDigits: 0)) across \(setCount) sets.")
+        }
+        return ("Session complete", "You logged \(setCount) sets and \(weightUnit.formattedWithUnit(volumeKg, fractionDigits: 0)) of training volume.")
+    }
+}
+
 enum RecommendationEngine {
     static func nextWorkout(workouts: [Workout]) -> (title: String, detail: String) {
         let chest = RecoveryEngine.muscleRecovery(.chest, workouts: workouts)

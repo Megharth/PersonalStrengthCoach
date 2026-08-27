@@ -35,6 +35,75 @@ final class TrainingEngineTests: XCTestCase {
         XCTAssertTrue(PerformanceEngine.personalRecords(in: current, history: [old]).contains("Squat estimated 1RM"))
     }
 
+    func testWorkoutRecapBestSetIgnoresWarmupsAndUsesHighestEstimatedOneRM() {
+        let warmup = ExerciseSet(exercise: "Bench Press", weight: 120, reps: 10, setNumber: 1, primaryMuscle: .chest, setType: .warmup)
+        let lowerEstimate = ExerciseSet(exercise: "Bench Press", weight: 90, reps: 5, setNumber: 2, primaryMuscle: .chest)
+        let best = ExerciseSet(exercise: "Bench Press", weight: 85, reps: 10, setNumber: 3, primaryMuscle: .chest, setType: .failure)
+
+        XCTAssertTrue(WorkoutRecapEngine.bestSet(in: [warmup, lowerEstimate, best]) === best)
+    }
+
+    func testWorkoutRecapBestSetUsesHighestRepsForBodyweightSets() {
+        let lowerReps = ExerciseSet(exercise: "Pull-Up", weight: 0, reps: 8, setNumber: 1, primaryMuscle: .upperBack)
+        let highestReps = ExerciseSet(exercise: "Pull-Up", weight: 0, reps: 12, setNumber: 2, primaryMuscle: .upperBack)
+
+        XCTAssertTrue(WorkoutRecapEngine.bestSet(in: [lowerReps, highestReps]) === highestReps)
+    }
+
+    func testWorkoutRecapBestSetReturnsNilWithoutEligibleSetsAndUsesDeterministicTieBreakers() {
+        let warmup = ExerciseSet(exercise: "Bench Press", weight: 100, reps: 8, setNumber: 1, primaryMuscle: .chest, setType: .warmup)
+        let noReps = ExerciseSet(exercise: "Bench Press", weight: 100, reps: 0, setNumber: 2, primaryMuscle: .chest)
+        XCTAssertNil(WorkoutRecapEngine.bestSet(in: [warmup, noReps]))
+
+        let lighter = ExerciseSet(exercise: "Bench Press", weight: 90, reps: 10, setNumber: 1, primaryMuscle: .chest)
+        let heavierLater = ExerciseSet(exercise: "Bench Press", weight: 100, reps: 6, setNumber: 3, primaryMuscle: .chest)
+        let heavierEarlier = ExerciseSet(exercise: "Bench Press", weight: 100, reps: 6, setNumber: 2, primaryMuscle: .chest)
+        XCTAssertEqual(lighter.estimated1RM, heavierLater.estimated1RM, accuracy: 0.001)
+        XCTAssertEqual(heavierLater.estimated1RM, heavierEarlier.estimated1RM, accuracy: 0.001)
+        XCTAssertTrue(WorkoutRecapEngine.bestSet(in: [lighter, heavierLater, heavierEarlier]) === heavierEarlier)
+    }
+
+    func testWorkoutRecapCoachSummaryCountsMultipleRecordsCorrectly() {
+        let multiRecordSummary = WorkoutRecapEngine.coachSummary(
+            records: ["Bench Press estimated 1RM", "Squat estimated 1RM", "Deadlift estimated 1RM"],
+            volumeKg: 5_000, setCount: 10, weightUnit: .kilograms
+        )
+        XCTAssertEqual(multiRecordSummary.title, "Strong session")
+        XCTAssertTrue(multiRecordSummary.detail.contains("3 personal records"))
+    }
+
+    func testWorkoutRecapCoachSummaryUsesGreaterThanOrEqualThresholdForVolume() {
+        let atThreshold = WorkoutRecapEngine.coachSummary(
+            records: [], volumeKg: 8_000, setCount: 10, weightUnit: .kilograms
+        )
+        XCTAssertEqual(atThreshold.title, "High-volume work")
+
+        let belowThreshold = WorkoutRecapEngine.coachSummary(
+            records: [], volumeKg: 7_999, setCount: 10, weightUnit: .kilograms
+        )
+        XCTAssertEqual(belowThreshold.title, "Session complete")
+    }
+
+    func testWorkoutRecapCoachSummaryIsFactualForRecordsVolumeAndDefaultSessions() {
+        let recordSummary = WorkoutRecapEngine.coachSummary(
+            records: ["Bench Press estimated 1RM"], volumeKg: 9_000, setCount: 12, weightUnit: .kilograms
+        )
+        XCTAssertEqual(recordSummary.title, "Strong session")
+        XCTAssertEqual(recordSummary.detail, "You set 1 personal record: Bench Press estimated 1RM.")
+
+        let highVolumeSummary = WorkoutRecapEngine.coachSummary(
+            records: [], volumeKg: 9_000, setCount: 12, weightUnit: .kilograms
+        )
+        XCTAssertEqual(highVolumeSummary.title, "High-volume work")
+        XCTAssertEqual(highVolumeSummary.detail, "You completed 9000 kg across 12 sets.")
+
+        let defaultSummary = WorkoutRecapEngine.coachSummary(
+            records: [], volumeKg: 1_200, setCount: 6, weightUnit: .pounds
+        )
+        XCTAssertEqual(defaultSummary.title, "Session complete")
+        XCTAssertEqual(defaultSummary.detail, "You logged 6 sets and 2646 lb of training volume.")
+    }
+
     func testReadinessWithoutHealthDataUsesNeutralFallback() {
         let result = RecoveryEngine.readiness(today: nil, recent: [], workouts: [])
 

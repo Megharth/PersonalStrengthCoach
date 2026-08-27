@@ -38,20 +38,16 @@ Use strength trends to confirm progressive overload is working. If your estimate
 
 All logged workouts with session details and personal records.
 
-**Workout List:**
-Tap any workout to see:
-- **Session stats** — Total volume (kg), duration (minutes), estimated calories burned.
-- **Exercises performed** — Grouped by exercise name with set count and volume per movement, in the order exercises were logged or added. Older workouts without stored ordering use a deterministic alphabetical fallback.
-- **Personal Records** — Highlighted PRs achieved in that session (e.g., "Bench Press — heaviest set" or "Squat — most reps at weight").
-- **Coach Notes** — Contextual feedback on the session (high volume, PR achieved, general encouragement).
+**Workout Recap:**
+Tap any workout to see a recap with:
+- **Session metrics** — Total volume, duration, and calories in a fixed three-metric strip. Calories display as **—** when they were not tracked.
+- **Personal Records** — A highlighted, compact summary of PRs achieved in that session. Up to three records are shown directly; tap the overflow button to reveal any additional records.
+- **Session recap** — Local, factual feedback based only on the session’s recorded sets, volume, and PRs; it does not send a coaching request.
+- **Exercises performed** — Rounded exercise cards in the order exercises were logged or added. Older workouts without stored ordering use a deterministic alphabetical fallback. Each card summarizes set count, working volume, and best eligible set; tap it to expand the session’s individual sets, including set type and optional RPE.
+- **Notes** — An imported or otherwise stored note appears in a separate card when present. This screen does not add a note-editing workflow.
 - **Share Workout** — Tap the share icon in the top-right to create a plain-text summary with session stats, exercises, set details, set types, optional RPE, and notes. Weights and total volume use the selected kg/lb display unit. This is separate from the full JSON data export in Settings.
 
-**Exercise Deep Dive:**
-Tap an exercise within a workout to view:
-- **Estimated 1RM** — Current Brzycki formula estimate based on your best recent set.
-- **Best Set** — Heaviest weight logged for this exercise across all history.
-- **1RM Progression Chart** — Estimated 1RM over time to visualize strength gains or plateaus.
-- **Progression Guidance** — Coach feedback on whether you're gaining, plateauing, or regressing, with actionable suggestions.
+Exercise history and progression are not linked from the saved-workout recap at this time.
 
 **Fixing or Removing a Workout:**
 - **Edit** — Tap a workout, then the pencil in the top-right. You can change the

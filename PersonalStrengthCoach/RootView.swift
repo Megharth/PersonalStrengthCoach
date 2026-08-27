@@ -305,48 +305,125 @@ struct WorkoutDetailView: View {
                 }
             }
     }
-    var body: some View { List {
-        Section("Session") { LabeledContent("Volume", value: weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0)); LabeledContent("Duration", value: "\(workout.durationMinutes) min"); LabeledContent("Calories", value: "\(workout.calories) kcal") }
-        Section("Exercises") {
-            ForEach(groupedExercises, id: \.name) { exercise in
-                ExerciseRow(name: exercise.name, sets: exercise.sets, allSets: history.flatMap(\.sets))
+    private var records: [String] {
+        PerformanceEngine.personalRecords(in: workout, history: history)
+    }
+
+    private var trimmedNotes: String {
+        workout.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func coachSummary(records: [String]) -> (title: String, detail: String) {
+        WorkoutRecapEngine.coachSummary(
+            records: records,
+            volumeKg: workout.volume,
+            setCount: workout.sets.count,
+            weightUnit: weightUnit
+        )
+    }
+
+    var body: some View {
+        let sessionRecords = records
+        let summary = coachSummary(records: sessionRecords)
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(workout.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                workoutMetrics
+
+                if !sessionRecords.isEmpty {
+                    SectionTitle("Personal records")
+                    PersonalRecordsCard(records: sessionRecords)
+                }
+
+                SectionTitle("Session recap")
+                CoachCard(title: summary.title, detail: summary.detail, icon: "sparkles")
+                    .accessibilityElement(children: .combine)
+
+                SectionTitle("Exercises")
+                ForEach(groupedExercises, id: \.name) { exercise in
+                    ExpandableExerciseCard(
+                        name: exercise.name,
+                        sets: exercise.sets,
+                        hasPersonalRecord: sessionRecords.contains("\(exercise.name) estimated 1RM")
+                    )
+                }
+
+                if !trimmedNotes.isEmpty {
+                    SectionTitle("Notes")
+                    CoachCard(title: "Your notes", detail: trimmedNotes, icon: "note.text")
+                        .accessibilityElement(children: .combine)
+                }
+
+                Button(role: .destructive) {
+                    showingDeleteConfirmation = true
+                } label: {
+                    Text("Delete Workout")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .padding(.top, 4)
+            }
+            .padding()
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle(workout.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                ShareLink(item: shareText) {
+                    Label("Share Workout", systemImage: "square.and.arrow.up")
+                }
+                .accessibilityIdentifier("shareWorkoutButton")
+                Button { showingEditor = true } label: { Label("Edit Workout", systemImage: "pencil") }
+                    .accessibilityIdentifier("editWorkoutButton")
             }
         }
-        let records = PerformanceEngine.personalRecords(in: workout, history: history)
-        if !records.isEmpty { Section("Personal records") { ForEach(records, id: \.self) { Label($0, systemImage: "trophy.fill").foregroundStyle(.yellow) } } }
-        Section("Coach notes") {
-            if !records.isEmpty {
-                Text("Outstanding effort — achieved PRs in \(records.joined(separator: ", ")). Maintain steady recovery before your next heavy session.")
-            } else if workout.volume > 8_000 {
-                Text("High-volume session completed (\(weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0))). Focus on adequate protein intake and sleep tonight.")
-            } else {
-                Text("Solid training session (\(workout.sets.count) sets). Keep your compounds controlled and preserve clean technique.")
+        // WorkoutLoggerView owns its own NavigationStack, so present it bare.
+        .sheet(isPresented: $showingEditor) { WorkoutLoggerView(workout: workout) }
+        .confirmationDialog("Delete workout?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            Button("Delete Workout", role: .destructive) { deleteWorkout() }
+            Button("Cancel", role: .cancel) { }
+        } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
+        .alert("Couldn’t delete workout", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) { }
+        } message: { Text(deleteError ?? "Please try again.") }
+    }
+
+    private var workoutMetrics: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                volumeMetric
+                durationMetric
+                caloriesMetric
             }
-        }
-        Section {
-            Button("Delete Workout", role: .destructive) { showingDeleteConfirmation = true }
+            VStack(spacing: 10) {
+                volumeMetric
+                durationMetric
+                caloriesMetric
+            }
         }
     }
-    .navigationTitle(workout.title).navigationBarTitleDisplayMode(.inline)
-    .toolbar {
-        ToolbarItemGroup(placement: .topBarTrailing) {
-            ShareLink(item: shareText) {
-                Label("Share Workout", systemImage: "square.and.arrow.up")
-            }
-            .accessibilityIdentifier("shareWorkoutButton")
-            Button { showingEditor = true } label: { Label("Edit Workout", systemImage: "pencil") }
-                .accessibilityIdentifier("editWorkoutButton")
-        }
+
+    private var volumeMetric: some View {
+        WorkoutRecapMetric(title: "Volume", value: weightUnit.formattedWithUnit(workout.volume, fractionDigits: 0), icon: "dumbbell.fill", tint: .mint)
+            .accessibilityIdentifier("workoutDetailMetric-Volume")
     }
-    // WorkoutLoggerView owns its own NavigationStack, so present it bare.
-    .sheet(isPresented: $showingEditor) { WorkoutLoggerView(workout: workout) }
-    .confirmationDialog("Delete workout?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
-        Button("Delete Workout", role: .destructive) { deleteWorkout() }
-        Button("Cancel", role: .cancel) { }
-    } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
-    .alert("Couldn’t delete workout", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
-        Button("OK", role: .cancel) { }
-    } message: { Text(deleteError ?? "Please try again.") }
+
+    private var durationMetric: some View {
+        WorkoutRecapMetric(title: "Duration", value: "\(workout.durationMinutes) min", icon: "clock.fill", tint: .indigo)
+            .accessibilityIdentifier("workoutDetailMetric-Duration")
+    }
+
+    private var caloriesMetric: some View {
+        // The logger does not collect calories yet; retain the third metric so
+        // future calorie tracking can populate it without changing the layout.
+        WorkoutRecapMetric(title: "Calories", value: workout.calories > 0 ? "\(workout.calories) kcal" : "—", icon: "flame.fill", tint: .orange, detail: workout.calories > 0 ? nil : "Not tracked")
+            .accessibilityIdentifier("workoutDetailMetric-Calories")
     }
 
     private func deleteWorkout() {
@@ -362,38 +439,201 @@ struct WorkoutDetailView: View {
     }
 }
 
-private struct ExerciseRow: View {
+private struct WorkoutRecapMetric: View {
+    let title: String
+    let value: String
+    let icon: String
+    let tint: Color
+    var detail: String? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(value)
+                    .font(.headline.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail ?? title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PersonalRecordsCard: View {
+    let records: [String]
+    @State private var showsAllRecords = false
+
+    private var displayedRecords: [String] {
+        showsAllRecords ? records : Array(records.prefix(3))
+    }
+
+    private var remainingRecordCount: Int {
+        max(0, records.count - displayedRecords.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 135), spacing: 8)], alignment: .leading, spacing: 8) {
+                ForEach(displayedRecords, id: \.self) { record in
+                    Text(record)
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.yellow.opacity(0.14), in: Capsule())
+                }
+                if remainingRecordCount > 0 {
+                    Button("+\(remainingRecordCount) more") {
+                        showsAllRecords = true
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(17)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+    }
+}
+
+private struct ExpandableExerciseCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let name: String
     let sets: [ExerciseSet]
-    let allSets: [ExerciseSet]
-    private var volume: Double { sets.reduce(0) { total, set in
-        guard set.setType != .warmup else { return total }
-        return total + set.weight * Double(set.reps)
-    } }
+    let hasPersonalRecord: Bool
+    @State private var isExpanded = false
 
-    private var metadataSummary: String {
-        sets.map { set in
-            var details = set.setType.rawValue
-            if let rpe = set.rpe { details += " · RPE \(String(format: "%.1f", rpe))" }
-            return details
-        }.joined(separator: " · ")
+    private var orderedSets: [ExerciseSet] {
+        sets.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.setNumber != rhs.element.setNumber {
+                    return lhs.element.setNumber < rhs.element.setNumber
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
+
+    private var volume: Double {
+        sets.reduce(0) { total, set in
+            guard set.setType != .warmup else { return total }
+            return total + set.weight * Double(set.reps)
+        }
+    }
+
+    private var bestSet: ExerciseSet? {
+        WorkoutRecapEngine.bestSet(in: sets)
+    }
+
+    private var accessibilitySummary: String {
+        var summary = "\(name)\(hasPersonalRecord ? ", personal record" : ""), \(sets.count) sets, \(weightUnit.formattedWithUnit(volume, fractionDigits: 0))"
+        if let bestSet {
+            summary += ". \(bestSetSummary(bestSet))"
+        }
+        return summary
+    }
+
     var body: some View {
-        NavigationLink {
-            ExerciseDetailView(exercise: name, sets: allSets)
-        } label: {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(name)
-                Text("\(sets.count) sets · \(weightUnit.formattedWithUnit(volume, fractionDigits: 0))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text(metadataSummary)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 7) {
+                            Text(name)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            if hasPersonalRecord {
+                                Image(systemName: "trophy.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.yellow)
+                                    .accessibilityLabel("Personal record")
+                            }
+                        }
+                        Text("\(sets.count) sets · \(weightUnit.formattedWithUnit(volume, fractionDigits: 0))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        if let bestSet {
+                            Text(bestSetSummary(bestSet))
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.down")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("exerciseCard-\(name)")
+            .accessibilityLabel(accessibilitySummary)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(isExpanded ? "Hides the logged sets" : "Shows the logged sets")
+
+            if isExpanded {
+                Divider().padding(.vertical, 13)
+                VStack(alignment: .leading, spacing: 11) {
+                    ForEach(orderedSets, id: \.persistentModelID) { set in
+                        ExerciseSetRecapRow(set: set)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+        .animation(reduceMotion ? nil : .snappy, value: isExpanded)
+    }
+
+    private func bestSetSummary(_ set: ExerciseSet) -> String {
+        var summary = "Best set: \(set.weight > 0 ? weightUnit.formattedWithUnit(set.weight) : "Bodyweight") × \(set.reps)"
+        if let rpe = set.rpe {
+            summary += " · RPE \(String(format: "%.1f", rpe))"
+        }
+        return summary
+    }
+}
+
+private struct ExerciseSetRecapRow: View {
+    @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
+    private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
+    let set: ExerciseSet
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("Set \(set.setNumber)")
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            VStack(alignment: .trailing, spacing: 3) {
+                Text("\(set.weight > 0 ? weightUnit.formattedWithUnit(set.weight) : "Bodyweight") × \(set.reps)")
+                    .font(.subheadline.weight(.medium))
+                HStack(spacing: 5) {
+                    if set.setType != .working {
+                        Text(set.setType.rawValue)
+                    }
+                    if let rpe = set.rpe {
+                        Text("RPE \(String(format: "%.1f", rpe))")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
