@@ -735,8 +735,13 @@ private struct WeightInputField: View {
                     text = unit.formatted(weightKg)
                     lastSyncedWeightKg = weightKg
                 }
+                .onChange(of: text) { _, _ in
+                    // Keep the model current while the field is focused. Save and
+                    // Mark Complete can run before SwiftUI delivers a focus-loss
+                    // callback, so blur-only commits can lose the latest value.
+                    commitWeight()
+                }
                 .onChange(of: weightKg) { _, newValue in
-
                     // A model change equal to the value just parsed came from this
                     // field. Other changes (for example, Previous Set's Use button)
                     // must still refresh the visible text.
