@@ -365,7 +365,9 @@ struct WorkoutDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
                 .tint(.red)
+                .accessibilityIdentifier("deleteWorkoutButton")
                 .padding(.top, 4)
             }
             .padding()
@@ -451,21 +453,30 @@ private struct WorkoutRecapMetric: View {
             Image(systemName: icon)
                 .foregroundStyle(tint)
                 .frame(width: 20)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(value)
                     .font(.headline.weight(.semibold))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(detail ?? title)
+                Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let detail {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(detail.map { "\(value), \($0)" } ?? value)
     }
 }
 
@@ -492,11 +503,14 @@ private struct PersonalRecordsCard: View {
                         .background(.yellow.opacity(0.14), in: Capsule())
                 }
                 if remainingRecordCount > 0 {
-                    Button("+\(remainingRecordCount) more") {
+                    Button("Show \(remainingRecordCount) more") {
                         showsAllRecords = true
                     }
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .contentShape(Capsule())
                 }
             }
         }
@@ -551,24 +565,29 @@ private struct ExpandableExerciseCard: View {
             } label: {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 5) {
-                        HStack(spacing: 7) {
+                        HStack(alignment: .firstTextBaseline, spacing: 7) {
                             Text(name)
                                 .font(.headline)
                                 .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                                .fixedSize(horizontal: false, vertical: true)
                             if hasPersonalRecord {
                                 Image(systemName: "trophy.fill")
                                     .font(.caption)
                                     .foregroundStyle(.yellow)
-                                    .accessibilityLabel("Personal record")
+                                    .accessibilityHidden(true)
                             }
                         }
                         Text("\(sets.count) sets · \(weightUnit.formattedWithUnit(volume, fractionDigits: 0))")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         if let bestSet {
                             Text(bestSetSummary(bestSet))
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     Spacer(minLength: 8)
@@ -576,6 +595,7 @@ private struct ExpandableExerciseCard: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
@@ -614,26 +634,52 @@ private struct ExerciseSetRecapRow: View {
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
     let set: ExerciseSet
 
+    private var performanceSummary: String {
+        "\(set.weight > 0 ? weightUnit.formattedWithUnit(set.weight) : "Bodyweight") × \(set.reps)"
+    }
+
+    private var metadataSummary: String? {
+        let summary = [
+            set.setType != .working ? set.setType.rawValue : nil,
+            set.rpe.map { "RPE \(String(format: "%.1f", $0))" }
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+        return summary.isEmpty ? nil : summary
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("Set \(set.setNumber)")
-                .font(.subheadline.weight(.medium))
-            Spacer()
-            VStack(alignment: .trailing, spacing: 3) {
-                Text("\(set.weight > 0 ? weightUnit.formattedWithUnit(set.weight) : "Bodyweight") × \(set.reps)")
-                    .font(.subheadline.weight(.medium))
-                HStack(spacing: 5) {
-                    if set.setType != .working {
-                        Text(set.setType.rawValue)
-                    }
-                    if let rpe = set.rpe {
-                        Text("RPE \(String(format: "%.1f", rpe))")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                setNumber
+                Spacer(minLength: 10)
+                performanceDetail(alignment: .trailing)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                setNumber
+                performanceDetail(alignment: .leading)
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var setNumber: some View {
+        Text("Set \(set.setNumber)")
+            .font(.subheadline.weight(.medium))
+            .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private func performanceDetail(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 3) {
+            Text(performanceSummary)
+                .font(.subheadline.weight(.medium))
+                .fixedSize(horizontal: true, vertical: true)
+            if let metadataSummary {
+                Text(metadataSummary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: true)
+            }
+        }
     }
 }
