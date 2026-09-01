@@ -107,6 +107,7 @@ struct WorkoutLoggerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @Query(sort: \WorkoutInProgress.lastUpdated, order: .reverse) private var inProgressSessions: [WorkoutInProgress]
     let workout: Workout?          // nil == log a new workout
@@ -128,6 +129,9 @@ struct WorkoutLoggerView: View {
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     private var weightUnit: WeightUnit { WeightUnit(rawValue: weightUnitRawValue) ?? .defaultUnit }
+    private var exerciseListAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.28)
+    }
 
     // Explicit init so `WorkoutLoggerView()` still resolves once `workout` is a
     // stored non-defaulted property: adding it removes the synthesized default init,
@@ -142,110 +146,151 @@ struct WorkoutLoggerView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Workout") {
-                    TextField("Workout name", text: $title)
-                    if isEditing {
-                        Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
-                    }
-                }
+            loggerList
+        }
+    }
 
-                if exercises.isEmpty {
-                    ContentUnavailableView("Add your first exercise", systemImage: "dumbbell.fill", description: Text("Choose from the exercise library or create your own."))
-                        .listRowBackground(Color.clear)
+    private var loggerList: some View {
+        List {
+            Section("Workout") {
+                TextField("Workout name", text: $title)
+                if isEditing {
+                    Stepper("Duration: \(durationMinutes) min", value: $durationMinutes, in: 1...240)
                 }
+            }
 
-                ForEach($exercises) { $exercise in
-                    ExerciseLoggerCard(
-                        exercise: $exercise,
-                        previous: PreviousSetEngine.mostRecentPerformance(
-                            for: exercise.name,
-                            in: allWorkouts,
-                            excluding: workout
-                        ),
-                        weightUnit: weightUnit
-                    ) {
-                        exercises.removeAll { $0.id == exercise.id }
-                    } startRest: {
-                        startRestTimer()
-                    }
-                }
+            if exercises.isEmpty {
+                ContentUnavailableView("Add your first exercise", systemImage: "dumbbell.fill", description: Text("Choose from the exercise library or create your own."))
+                    .listRowBackground(Color.clear)
+            }
 
-                Section {
-                    Button { showingExercisePicker = true } label: {
-                        Label("Add exercise", systemImage: "plus.circle.fill")
-                            .fontWeight(.semibold)
-                    }
-                    .accessibilityIdentifier("addExerciseButton")
+            ForEach($exercises) { $exercise in
+                exerciseRow(for: $exercise)
+            }
+
+            Section {
+                Button { showingExercisePicker = true } label: {
+                    Label("Add exercise", systemImage: "plus.circle.fill")
+                        .fontWeight(.semibold)
+                }
+                .accessibilityIdentifier("addExerciseButton")
+            }
+        }
+        // Docked via safeAreaInset rather than a trailing List section: a
+        // stat a set is actively being logged against (Rest, above all)
+        // needs to stay visible regardless of scroll position or which
+        // set row is expanded, not scroll away below the exercise list.
+        .safeAreaInset(edge: .top) {
+            sessionStatsInset
+        }
+        .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: loadDraftIfNeeded)
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { persistDraft() }
+        }
+        .onChange(of: title) { _, _ in persistDraft() }
+        .onChange(of: exercises) { _, _ in persistDraft() }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                now = .now
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(isEditing ? "Cancel" : "Discard") {
+                    if isEditing { dismiss() } else { showingDiscardConfirmation = true }
                 }
             }
-            // Docked via safeAreaInset rather than a trailing List section: a
-            // stat a set is actively being logged against (Rest, above all)
-            // needs to stay visible regardless of scroll position or which
-            // set row is expanded, not scroll away below the exercise list.
-            .safeAreaInset(edge: .top) {
-                if !isEditing {
-                    SessionStatsStrip(
-                        volume: weightUnit.formattedWithUnit(WorkoutInProgressEngine.volume(of: exercises), fractionDigits: 0),
-                        elapsed: "\(WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60) min",
-                        rest: WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now).flatMap { $0 > 0 ? "\($0 / 60):\(String(format: "%02d", $0 % 60))" : nil }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(.bar)
-                    .overlay(alignment: .bottom) { Divider() }
-                }
-            }
-            .navigationTitle(isEditing ? "Edit Workout" : "Log Workout")
-            .navigationBarTitleDisplayMode(.inline)
-            .onAppear(perform: loadDraftIfNeeded)
-            .onChange(of: scenePhase) { _, phase in
-                if phase != .active { persistDraft() }
-            }
-            .onChange(of: title) { _, _ in persistDraft() }
-            .onChange(of: exercises) { _, _ in persistDraft() }
-            .task {
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(1))
-                    now = .now
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(isEditing ? "Cancel" : "Discard") {
-                        if isEditing { dismiss() } else { showingDiscardConfirmation = true }
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
-            }
-            .confirmationDialog("Discard workout draft?", isPresented: $showingDiscardConfirmation, titleVisibility: .visible) {
-                Button("Discard Draft", role: .destructive) { discardDraft() }
-                Button("Keep Editing", role: .cancel) { }
-            } message: { Text("This removes the unfinished workout and all of its saved sets.") }
-            .sheet(isPresented: $showingExercisePicker) {
-                ExercisePicker { exercise in
-                    let previous = PreviousSetEngine.mostRecentPerformance(
-                        for: exercise.name,
-                        in: allWorkouts,
-                        excluding: workout
-                    )
+            ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.fontWeight(.semibold) }
+        }
+        .confirmationDialog("Discard workout draft?", isPresented: $showingDiscardConfirmation, titleVisibility: .visible) {
+            Button("Discard Draft", role: .destructive) { discardDraft() }
+            Button("Keep Editing", role: .cancel) { }
+        } message: { Text("This removes the unfinished workout and all of its saved sets.") }
+        .sheet(isPresented: $showingExercisePicker) {
+            ExercisePicker { exercise in
+                let previous = previousPerformance(for: exercise.name)
+                withAnimation(exerciseListAnimation) {
                     exercises.append(LoggedExercise.draftExercise(from: exercise, previous: previous))
-                    showingExercisePicker = false
                 }
+                showingExercisePicker = false
             }
-            .confirmationDialog("Replace current workout?", isPresented: $showingRoutineReplacementConfirmation, titleVisibility: .visible) {
-                Button("Replace", role: .destructive) {
-                    if let routine = routinePendingReplacement { applyRoutine(routine) }
-                    routinePendingReplacement = nil
-                }
-                Button("Keep Editing", role: .cancel) { routinePendingReplacement = nil }
-            } message: { Text("Starting from this routine will replace the exercises you've already added.") }
-            .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
-                Button("OK", role: .cancel) { }
-            } message: { Text("A workout needs at least one exercise and one working set.") }
-            .alert("Couldn’t save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
-                Button("OK", role: .cancel) { }
-            } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
+        }
+        .confirmationDialog("Replace current workout?", isPresented: $showingRoutineReplacementConfirmation, titleVisibility: .visible) {
+            Button("Replace", role: .destructive) {
+                if let routine = routinePendingReplacement { applyRoutine(routine) }
+                routinePendingReplacement = nil
+            }
+            Button("Keep Editing", role: .cancel) { routinePendingReplacement = nil }
+        } message: { Text("Starting from this routine will replace the exercises you've already added.") }
+        .alert("Add an exercise first", isPresented: $showingEmptyAlert) {
+            Button("OK", role: .cancel) { }
+        } message: { Text("A workout needs at least one exercise and one working set.") }
+        .alert("Couldn’t save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK", role: .cancel) { }
+        } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
+    }
+
+    @ViewBuilder
+    private var sessionStatsInset: some View {
+        if !isEditing {
+            let sessionVolume = WorkoutInProgressEngine.volume(of: exercises)
+            let elapsedMinutes = WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60
+            let remainingRestSeconds = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now)
+            let restLabel: String? = remainingRestSeconds.flatMap { seconds in
+                guard seconds > 0 else { return nil }
+                return "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+            }
+
+            SessionStatsStrip(
+                volume: weightUnit.formattedWithUnit(sessionVolume, fractionDigits: 0),
+                elapsed: "\(elapsedMinutes) min",
+                rest: restLabel
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider() }
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+            .animation(reduceMotion ? .easeInOut(duration: 0.15) : .easeInOut(duration: 0.25), value: restEndsAt != nil)
+        }
+    }
+
+    @ViewBuilder
+    private func exerciseRow(for exercise: Binding<LoggedExercise>) -> some View {
+        let exerciseID = exercise.wrappedValue.id
+        ExerciseLoggerCard(
+            exercise: exercise,
+            previous: previousPerformance(for: exercise.wrappedValue.name),
+            weightUnit: weightUnit,
+            reduceMotion: reduceMotion,
+            remove: { removeExercise(id: exerciseID) },
+            startRest: startRestTimer
+        )
+        .transition(exerciseCardTransition)
+        .id(exerciseID)
+    }
+
+    private var exerciseCardTransition: AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(
+            insertion: .move(edge: .top).combined(with: .opacity),
+            removal: .opacity
+        )
+    }
+
+    private func previousPerformance(for exerciseName: String) -> PreviousSetPerformance? {
+        PreviousSetEngine.mostRecentPerformance(
+            for: exerciseName,
+            in: allWorkouts,
+            excluding: workout
+        )
+    }
+
+    private func removeExercise(id: LoggedExercise.ID) {
+        withAnimation(exerciseListAnimation) {
+            exercises.removeAll { $0.id == id }
         }
     }
 
@@ -488,14 +533,23 @@ private struct ExerciseLoggerCard: View {
     @Binding var exercise: LoggedExercise
     let previous: PreviousSetPerformance?
     let weightUnit: WeightUnit
+    let reduceMotion: Bool
     let remove: () -> Void
     let startRest: () -> Void
     @State private var expandedSetID: EditableSet.ID?
 
-    init(exercise: Binding<LoggedExercise>, previous: PreviousSetPerformance?, weightUnit: WeightUnit, remove: @escaping () -> Void, startRest: @escaping () -> Void) {
+    init(
+        exercise: Binding<LoggedExercise>,
+        previous: PreviousSetPerformance?,
+        weightUnit: WeightUnit,
+        reduceMotion: Bool,
+        remove: @escaping () -> Void,
+        startRest: @escaping () -> Void
+    ) {
         self._exercise = exercise
         self.previous = previous
         self.weightUnit = weightUnit
+        self.reduceMotion = reduceMotion
         self.remove = remove
         self.startRest = startRest
         self._expandedSetID = State(initialValue: exercise.wrappedValue.sets.first { !$0.isCompleted }?.id)
@@ -511,13 +565,15 @@ private struct ExerciseLoggerCard: View {
                         index: index,
                         weightUnit: weightUnit,
                         previousSet: previous?.sets[safe: index],
-                        collapse: { expandedSetID = nil },
+                        collapse: { updateExpandedSet(nil) },
                         markDone: { markDone(id: set.id) }
                     )
+                    .transition(setRowTransition)
                 } else {
                     CollapsedSetRow(set: set, index: index, weightUnit: weightUnit) {
-                        expandedSetID = set.id
+                        updateExpandedSet(set.id)
                     }
+                    .transition(setRowTransition)
                 }
             }
             .onDelete { offsets in
@@ -529,8 +585,10 @@ private struct ExerciseLoggerCard: View {
             }
             Button {
                 let newSet = EditableSet()
-                exercise.sets.append(newSet)
-                expandedSetID = newSet.id
+                withAnimation(setRowAnimation) {
+                    exercise.sets.append(newSet)
+                    expandedSetID = newSet.id
+                }
             } label: { Label("Add set", systemImage: "plus") }
         } header: {
             HStack {
@@ -552,10 +610,27 @@ private struct ExerciseLoggerCard: View {
     private func markDone(id: EditableSet.ID) {
         guard let setIndex = exercise.sets.firstIndex(where: { $0.id == id }) else { return }
         let willComplete = !exercise.sets[setIndex].isCompleted
-        exercise.sets[setIndex].isCompleted = willComplete
+        withAnimation(setRowAnimation) {
+            exercise.sets[setIndex].isCompleted = willComplete
+            guard willComplete else { return }
+            expandedSetID = exercise.sets[(setIndex + 1)...].first { !$0.isCompleted }?.id
+        }
         guard willComplete else { return }
         startRest()
-        expandedSetID = exercise.sets[(setIndex + 1)...].first { !$0.isCompleted }?.id
+    }
+
+    private var setRowAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.24)
+    }
+
+    private var setRowTransition: AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+    }
+
+    private func updateExpandedSet(_ id: EditableSet.ID?) {
+        withAnimation(setRowAnimation) {
+            expandedSetID = id
+        }
     }
 }
 
