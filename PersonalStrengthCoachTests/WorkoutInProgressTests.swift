@@ -21,6 +21,20 @@ final class WorkoutInProgressTests: XCTestCase {
         XCTAssertEqual(WorkoutInProgressEngine.remainingRestSeconds(endsAt: now.addingTimeInterval(-1), now: now), 0)
     }
 
+    func testFormattedRestKeepsExpiredTimerVisibleAsZero() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertNil(WorkoutInProgressEngine.formattedRest(endsAt: nil, now: now))
+        XCTAssertEqual(WorkoutInProgressEngine.formattedRest(endsAt: now.addingTimeInterval(90), now: now), "1:30")
+        XCTAssertEqual(WorkoutInProgressEngine.formattedRest(endsAt: now.addingTimeInterval(-1), now: now), "0:00")
+    }
+
+    func testFormattedRestPadsSecondsBelowTen() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        XCTAssertEqual(WorkoutInProgressEngine.formattedRest(endsAt: now.addingTimeInterval(5), now: now), "0:05")
+    }
+
     func testDraftRoundTripPreservesExerciseOrderSetOrderAndCompletion() {
         let exercises = [
             LoggedExercise(name: "Squat", primaryMuscle: .quads, sets: [

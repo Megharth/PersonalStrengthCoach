@@ -435,6 +435,14 @@ enum WorkoutInProgressEngine {
         return max(0, Int(ceil(endsAt.timeIntervalSince(now))))
     }
 
+    /// Formats the active rest timer while preserving the distinction between no
+    /// timer (`nil`) and an expired timer (`0:00`).
+    static func formattedRest(endsAt: Date?, now: Date) -> String? {
+        remainingRestSeconds(endsAt: endsAt, now: now).map { seconds in
+            "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
+        }
+    }
+
     /// Treat unfinished workout state as a singleton. The newest update wins;
     /// any older rows are stray duplicates that callers should remove.
     static func resolveActiveSession(among sessions: [WorkoutInProgress]) -> (current: WorkoutInProgress?, strays: [WorkoutInProgress]) {

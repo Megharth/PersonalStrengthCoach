@@ -238,11 +238,7 @@ struct WorkoutLoggerView: View {
         if !isEditing {
             let sessionVolume = WorkoutInProgressEngine.volume(of: exercises)
             let elapsedMinutes = WorkoutInProgressEngine.elapsedSeconds(start: sessionStart, now: now) / 60
-            let remainingRestSeconds = WorkoutInProgressEngine.remainingRestSeconds(endsAt: restEndsAt, now: now)
-            let restLabel: String? = remainingRestSeconds.flatMap { seconds in
-                guard seconds > 0 else { return nil }
-                return "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
-            }
+            let restLabel = WorkoutInProgressEngine.formattedRest(endsAt: restEndsAt, now: now)
 
             SessionStatsStrip(
                 volume: weightUnit.formattedWithUnit(sessionVolume, fractionDigits: 0),
