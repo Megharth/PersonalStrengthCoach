@@ -20,6 +20,18 @@ final class WeightUnitTests: XCTestCase {
         XCTAssertEqual(WeightUnit.pounds.formattedWithUnit(20), "44.1 lb")
     }
 
+    func testZeroFormattingPreservesZeroValueAndUnit() {
+        XCTAssertEqual(WeightUnit.kilograms.formatted(0), "0")
+        XCTAssertEqual(WeightUnit.kilograms.formatted(0, fractionDigits: 0), "0")
+        XCTAssertEqual(WeightUnit.kilograms.formattedWithUnit(0), "0 kg")
+        XCTAssertEqual(WeightUnit.pounds.formattedWithUnit(0), "0 lb")
+    }
+
+    func testFormattingRetainsLeadingZeroForSubOneValues() {
+        XCTAssertEqual(WeightUnit.kilograms.formatted(0.5), "0.5")
+        XCTAssertEqual(WeightUnit.kilograms.formatted(0.1), "0.1")
+    }
+
     func testNonFiniteFormattingIsUnavailable() {
         XCTAssertEqual(WeightUnit.pounds.formattedWithUnit(.infinity), "— lb")
     }

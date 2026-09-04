@@ -40,8 +40,13 @@ enum WeightUnit: String, CaseIterable, Codable, Identifiable {
 
 private extension String {
     func trimmingTrailingZeros() -> String {
-        guard contains(".") else { return self }
-        return trimmingCharacters(in: CharacterSet(charactersIn: "0")).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard let decimalIndex = firstIndex(of: ".") else { return self }
+        let wholeNumber = String(self[..<decimalIndex])
+        var fraction = String(self[index(after: decimalIndex)...])
+        while fraction.last == "0" {
+            fraction.removeLast()
+        }
+        return fraction.isEmpty ? wholeNumber : "\(wholeNumber).\(fraction)"
     }
 }
 

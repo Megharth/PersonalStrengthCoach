@@ -201,6 +201,52 @@ final class WorkoutLoggerUITests: XCTestCase {
         XCTAssertTrue(shareSheet.waitForExistence(timeout: 5), "Expected ShareLink to present the system share sheet")
     }
 
+    /// Regression coverage for committing buffered weight input before the same-tap
+    /// completion action. Each set is edited and immediately marked complete while
+    /// its keyboard remains active; all three values must survive the final save.
+    func testMultipleSetWeightInputPersistsWhenCompletedImmediately() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        addExercise(named: "Barbell Bench Press")
+
+        for (index, weight) in ["101", "102", "103"].enumerated() {
+            let weightField = app.textFields["weightField-\(index)"]
+            XCTAssertTrue(weightField.waitForExistence(timeout: 5), "Expected weight field for set \(index + 1)")
+            replaceText(in: weightField, with: weight)
+            XCTAssertEqual(weightField.value as? String, weight)
+
+            let completeButton = app.buttons["markCompleteButton-\(index)"]
+            XCTAssertTrue(completeButton.waitForExistence(timeout: 5), "Expected completion button for set \(index + 1)")
+            completeButton.tap()
+        }
+
+        app.buttons["Save"].tap()
+
+        let newestWorkout = app.buttons["workoutRow-0"]
+        XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5), "Expected the saved workout")
+        newestWorkout.tap()
+        let editWorkoutButton = app.buttons["editWorkoutButton"]
+        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
+        editWorkoutButton.tap()
+
+        for (index, weight) in ["101", "102", "103"].enumerated() {
+            let setRow = app.buttons["setRow-\(index)"]
+            XCTAssertTrue(setRow.waitForExistence(timeout: 5), "Expected saved set row \(index + 1)")
+            setRow.tap()
+            let weightField = app.textFields["weightField-\(index)"]
+            XCTAssertTrue(weightField.waitForExistence(timeout: 5))
+            XCTAssertEqual(weightField.value as? String, weight, "Expected set \(index + 1) weight to persist")
+            app.buttons["Collapse set \(index + 1)"].tap()
+        }
+    }
+
     /// Regression coverage for the "Last time" reference banner: editing a set
     /// with a matching prior-session performance must show the previous
     /// weight/reps beside the input fields, and tapping Use must copy those
