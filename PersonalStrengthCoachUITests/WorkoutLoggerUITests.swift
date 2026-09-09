@@ -169,7 +169,7 @@ final class WorkoutLoggerUITests: XCTestCase {
         markNewestSetComplete()
         addExercise(named: "Barbell Bench Press")
         markNewestSetComplete()
-        app.buttons["Save"].tap()
+        saveNewWorkout()
 
         let newestWorkout = app.buttons["workoutRow-0"]
         XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5), "Expected the newly saved workout to be first in the list")
@@ -227,7 +227,7 @@ final class WorkoutLoggerUITests: XCTestCase {
             completeButton.tap()
         }
 
-        app.buttons["Save"].tap()
+        saveNewWorkout()
 
         let newestWorkout = app.buttons["workoutRow-0"]
         XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5), "Expected the saved workout")
@@ -280,6 +280,75 @@ final class WorkoutLoggerUITests: XCTestCase {
 
         XCTAssertEqual(weightField.value as? String, "87.5", "Expected Use to copy the previous session's weight into the field")
         XCTAssertEqual(repsField.value as? String, "8", "Expected Use to copy the previous session's reps into the field")
+    }
+
+    func testSavingWorkoutPresentsSyncBiometricsSheetAndSyncsData() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        addExercise(named: "Barbell Bench Press")
+        markNewestSetComplete()
+
+        app.buttons["Save"].tap()
+
+        let navBar = app.navigationBars["Workout Saved"]
+        XCTAssertTrue(navBar.waitForExistence(timeout: 5))
+
+        let syncButton = app.buttons["Sync from Apple Health"]
+        XCTAssertTrue(syncButton.waitForExistence(timeout: 5))
+        syncButton.tap()
+
+        let successMessage = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Attached")).firstMatch
+        XCTAssertTrue(successMessage.waitForExistence(timeout: 5))
+
+        let doneButton = app.buttons["Done"].firstMatch
+        XCTAssertTrue(doneButton.waitForExistence(timeout: 5))
+        doneButton.tap()
+
+        XCTAssertTrue(navBar.waitForNonExistence(timeout: 5))
+        let newestWorkout = app.buttons["workoutRow-0"]
+        XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5))
+    }
+
+    func testSyncBiometricsSheetCanBeDismissedWithoutSyncing() throws {
+        app.tabBars.buttons["Workouts"].tap()
+
+        let addWorkoutMenuButton = app.buttons["addWorkoutMenuButton"]
+        XCTAssertTrue(addWorkoutMenuButton.waitForExistence(timeout: 5))
+        addWorkoutMenuButton.tap()
+        let logWorkoutMenuItem = app.buttons["logWorkoutMenuItem"]
+        XCTAssertTrue(logWorkoutMenuItem.waitForExistence(timeout: 5))
+        logWorkoutMenuItem.tap()
+
+        addExercise(named: "Barbell Bench Press")
+        markNewestSetComplete()
+
+        app.buttons["Save"].tap()
+
+        let navBar = app.navigationBars["Workout Saved"]
+        XCTAssertTrue(navBar.waitForExistence(timeout: 5))
+
+        let toolbarDone = app.buttons["syncBiometricsToolbarDoneButton"]
+        XCTAssertTrue(toolbarDone.waitForExistence(timeout: 5))
+        toolbarDone.tap()
+
+        XCTAssertTrue(navBar.waitForNonExistence(timeout: 5))
+        let newestWorkout = app.buttons["workoutRow-0"]
+        XCTAssertTrue(newestWorkout.waitForExistence(timeout: 5))
+    }
+
+    private func saveNewWorkout() {
+        app.buttons["Save"].tap()
+        let doneButton = app.buttons["Done"].firstMatch
+        if doneButton.waitForExistence(timeout: 5) {
+            doneButton.tap()
+        }
     }
 
     private func addExercise(named name: String) {

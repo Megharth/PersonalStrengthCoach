@@ -125,6 +125,10 @@ struct WorkoutLoggerView: View {
     @State private var restEndsAt: Date?
     @State private var now = Date.now
     @State private var showingDiscardConfirmation = false
+    @State private var showingSyncBiometrics = false
+    @State private var savedWorkoutStart: Date?
+    @State private var savedWorkoutEnd: Date?
+    @StateObject private var hkService = WorkoutHealthKitService()
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
@@ -231,6 +235,14 @@ struct WorkoutLoggerView: View {
         .alert("Couldn’t save workout", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
             Button("OK", role: .cancel) { }
         } message: { Text(saveError ?? "Your workout was not saved. Try again.") }
+        .sheet(isPresented: $showingSyncBiometrics, onDismiss: {
+            Task { await hkService.finishIfNeeded(at: savedWorkoutEnd ?? .now) }
+            dismiss()
+        }) {
+            if let start = savedWorkoutStart, let end = savedWorkoutEnd {
+                SyncBiometricsView(hkService: hkService, workoutStart: start, workoutEnd: end)
+            }
+        }
     }
 
     @ViewBuilder
@@ -342,6 +354,9 @@ struct WorkoutLoggerView: View {
             persistDraft()
         }
 
+        let start = sessionStart
+        Task { await hkService.startWorkout(at: start) }
+
         if let startingRoutine {
             if exercises.isEmpty {
                 applyRoutine(startingRoutine)
@@ -405,6 +420,7 @@ struct WorkoutLoggerView: View {
     }
 
     private func discardDraft() {
+        hkService.discardWorkout()
         inProgressSessions.forEach(context.delete)
         do {
             try context.save()
@@ -469,8 +485,12 @@ struct WorkoutLoggerView: View {
             if !isEditing {
                 inProgressSessions.forEach(context.delete)
                 try context.save()
+                savedWorkoutStart = sessionStart
+                savedWorkoutEnd = Date.now
+                showingSyncBiometrics = true
+            } else {
+                dismiss()
             }
-            dismiss()
         } catch {
             logger.error("Workout save failed")
             context.rollback()
@@ -982,6 +1002,116 @@ struct NewExerciseView: View {
             logger.error("Custom exercise save failed")
             context.rollback()
             saveError = "Your exercise was not saved. Try again."
+        }
+    }
+}
+
+struct SyncBiometricsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var hkService: WorkoutHealthKitService
+    let workoutStart: Date
+    let workoutEnd: Date
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Spacer()
+                Image(systemName: "heart.text.square.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.mint)
+
+                VStack(spacing: 8) {
+                    Text("Sync Biometrics")
+                        .font(.title2.weight(.bold))
+                    Text("After your wearable app has synced to Apple Health, tap below to attach heart rate and HRV from this session.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                syncStateView
+
+                Spacer()
+
+                Button("Done") { dismiss() }
+                    .buttonStyle(.bordered)
+                    .padding(.bottom)
+                    .accessibilityIdentifier("syncBiometricsDoneButton")
+            }
+            .accessibilityIdentifier("syncBiometricsView")
+            .navigationTitle("Workout Saved")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("syncBiometricsToolbarDoneButton")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var syncStateView: some View {
+        switch hkService.syncState {
+        case .idle:
+            Button {
+                Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd) }
+            } label: {
+                Label("Sync from Apple Health", systemImage: "arrow.trianglehead.2.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.mint)
+            .padding(.horizontal)
+            .accessibilityIdentifier("syncFromHealthButton")
+
+        case .syncing:
+            ProgressView("Syncing…")
+                .tint(.mint)
+
+        case .synced(let hrCount, let hrvCount):
+            VStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.mint)
+                if hrCount == 0 && hrvCount == 0 {
+                    Text("No heart rate or HRV samples found yet. Open your wearable app to sync, then try again.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                } else {
+                    Text("Attached \(hrCount) heart rate and \(hrvCount) HRV samples")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityIdentifier("syncBiometricsSuccessMessage")
+
+        case .failed(let message):
+            VStack(spacing: 12) {
+                Text("Sync failed: \(message)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+                Button {
+                    Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd) }
+                } label: {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.mint)
+                .padding(.horizontal)
+                .accessibilityIdentifier("tryAgainSyncButton")
+            }
+
+        case .unavailable:
+            Text("Apple Health is not available on this device.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
     }
 }

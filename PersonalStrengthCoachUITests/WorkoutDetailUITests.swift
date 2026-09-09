@@ -40,6 +40,17 @@ final class WorkoutDetailUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Delete Workout"].exists)
     }
 
+    func testWorkoutDetailSyncBiometricsAttachesHealthData() throws {
+        openSeededWorkout()
+
+        let syncButton = app.buttons["syncBiometricsWorkoutDetailButton"]
+        XCTAssertTrue(syncButton.waitForExistence(timeout: 5))
+        syncButton.tap()
+
+        let statusText = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Synced")).firstMatch
+        XCTAssertTrue(statusText.waitForExistence(timeout: 5))
+    }
+
     private func openSeededWorkout() {
         app.tabBars.buttons["Workouts"].tap()
         let firstWorkoutRow = app.buttons["workoutRow-0"]

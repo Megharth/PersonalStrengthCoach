@@ -1,0 +1,110 @@
+# Skill Observation Log
+
+Observations captured during task-oriented work.
+
+### Observation 1: Native audit findings need source verification
+
+**Status:** OPEN
+**Date:** 2026-08-16
+**Session context:** Impeccable critique of a native SwiftUI workout logger
+**Skill:** impeccable
+**Type:** open-source
+**Phase/Area:** Critique assessment synthesis
+
+**Issue:** An independent native audit produced several accessibility findings that were contradicted by the source, including claims that existing icon-only controls lacked labels. Line drift and treating a web-oriented detector as evidence made those findings look more authoritative than they were.
+
+**Suggested improvement:** Require the synthesis pass to verify every automated or sub-agent finding against the current source before reporting it, explicitly separating deterministic detector output from manual native review, and discard contradicted findings.
+
+**Principle:** Automated or delegated review findings are hypotheses until grounded in the current implementation.
+
+### Observation 2: Native keyboard accessory clutter needs visual verification
+
+**Status:** OPEN
+**Date:** 2026-08-18
+**Session context:** Workout logger UI refinement
+**Skill:** impeccable
+**Type:** open-source
+**Phase/Area:** Native responsive layout and interaction review
+
+**Issue:** A screenshot review revealed that adding a Done control to each numeric field's keyboard toolbar created a repeated row of Done buttons when multiple fields were present, an issue not surfaced by the existing functional UI tests.
+
+**Suggested improvement:** Add a native visual verification pass for keyboard presentation and accessory views whenever text-field toolbars are introduced, especially on screens containing repeated form rows.
+
+**Principle:** Functional tests should be complemented by visual checks of system-mediated UI, including keyboards, toolbars, sheets, and other repeated native surfaces.
+
+### Observation 3: Unit conversion boundaries must stay explicit in UI state
+
+**Status:** OPEN
+**Date:** 2026-08-18
+**Session context:** Fixing workout logger weight suggestion and commit display
+**Skill:** New skill candidate: native form-state debugging
+**Type:** open-source
+**Phase/Area:** Data/display boundary diagnosis
+
+**Issue:** A logger passed a display-unit value into a formatter that expected canonical kilograms, causing a pound value to be converted twice; the prompt also remained a placeholder after commit because placeholder text is not field state.
+
+**Suggested improvement:** Add a debugging checklist for forms with canonical and display units: label each value by its unit at every boundary, test one known conversion end-to-end, and verify committed state separately from prompt rendering.
+
+**Principle:** Treat display formatting and input state as separate boundaries, and make units explicit at every conversion boundary.
+
+### Observation 4: Shared (non-worktree) files under review can change mid-review
+
+**Status:** OPEN
+**Date:** 2026-08-18
+**Session context:** Reviewing PersonalStrengthCoach/WorkoutLoggerViewV2.swift against the Active Set Lane brief, from a git-worktree-isolated agent that had to read the file from the shared main checkout because it didn't exist in the assigned worktree
+**Skill:** New skill candidate: native form-state debugging (or a general review-hygiene principle)
+**Type:** open-source
+**Phase/Area:** Code review process / concurrent-editing detection
+
+**Issue:** A first full Read of the target file showed correct string interpolation (`\(...)`) and a simple V1-matching layout. A later grep/diff pass on the same path (minutes later, same session) showed different content — a literal escaped-backslash bug (`\\(...)` instead of `\(...)`) and additional padding/background changes — because another session was actively editing the file in the shared checkout while the review was in progress. The file's mtime and line count had both changed between the two reads. Nothing in the tool output flagged this; it was only caught by re-reading and diffing before finalizing the report.
+
+**Suggested improvement:** When a review target lives outside the agent's isolated worktree (a shared checkout another session can write to), snapshot `mtime`/line count (or a hash) at the start, and re-check it immediately before writing the final report — re-fetch fresh content if it changed, and note the volatility explicitly in the findings rather than silently trusting the first read.
+
+**Principle:** A review of a file outside your own isolation boundary is a review of a moving target unless you explicitly re-verify freshness right before reporting; treat the first read as provisional, not ground truth.
+
+### Observation 5: Large Dynamic Type needs per-screen verification
+
+**Status:** OPEN
+**Date:** 2026-08-18
+**Session context:** Visual verification of a native workout logger and dashboard
+**Skill:** impeccable
+**Type:** open-source
+**Phase/Area:** Native responsive layout and accessibility review
+
+**Issue:** A simulator pass at an accessibility content size exposed severe card reflow on a dashboard, while a focused functional test still passed. The logger itself was not captured at that size, so whole-app large-text readiness could not be inferred from a single screen or test.
+
+**Suggested improvement:** Require visual verification at representative large and accessibility content sizes for each changed screen, and record screen-specific outcomes separately from broader app observations.
+
+**Principle:** Dynamic Type regressions are screen-specific visual behavior; functional success and one-screen inspection do not establish whole-app accessibility readiness.
+
+
+### Observation 6: Source-level layout edits need compile verification
+
+**Status:** OPEN
+**Date:** 2026-08-19
+**Session context:** Resuming workout logger V2 layout refinement from handoff
+**Skill:** impeccable
+**Type:** open-source
+**Phase/Area:** Native responsive layout implementation
+
+**Issue:** A structural layout edit compiled only after fixing an undefined alignment type and an extra closing brace; focused UI tests could not expose either source-level issue.
+
+**Suggested improvement:** Keep a short compile checkpoint immediately after each structural SwiftUI layout edit, before proceeding to visual or UI-test verification, and treat handoff claims as pre-edit status until rerun.
+
+**Principle:** Source structure must be revalidated after layout refactors because behavioral tests do not cover parser and type-level regressions.
+
+
+### Observation 7: Forked UI implementations can silently lose recent fixes
+
+**Status:** OPEN
+**Date:** 2026-08-19
+**Session context:** Post-build review of a SwiftUI workout logger layout fork
+**Skill:** impeccable
+**Type:** open-source
+**Phase/Area:** Native UI refactor review
+
+**Issue:** A copied view used for layout experimentation omitted two recently added interaction safeguards—focus bindings and commit-trigger propagation—even though the copied screen compiled and navigation tests passed.
+
+**Suggested improvement:** When introducing a parallel UI implementation, diff behavior against the canonical implementation and explicitly audit focus, commit, accessibility, persistence, and recent-history changes before wiring it into production. Prefer one canonical implementation where practical.
+
+**Principle:** Compilation and navigation coverage do not establish behavioral parity for a forked UI implementation.

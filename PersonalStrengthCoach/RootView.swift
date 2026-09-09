@@ -290,6 +290,8 @@ struct WorkoutDetailView: View {
     @State private var showingEditor = false
     @State private var showingDeleteConfirmation = false
     @State private var deleteError: String?
+    @State private var isSyncingBiometrics = false
+    @State private var syncStatusMessage: String?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
     private var groupedExercises: [(name: String, sets: [ExerciseSet])] {
         Dictionary(grouping: workout.sets, by: \.normalizedExercise)
@@ -357,6 +359,8 @@ struct WorkoutDetailView: View {
                     CoachCard(title: "Your notes", detail: trimmedNotes, icon: "note.text")
                         .accessibilityElement(children: .combine)
                 }
+
+                healthSyncSection
 
                 Button(role: .destructive) {
                     showingDeleteConfirmation = true
@@ -426,6 +430,74 @@ struct WorkoutDetailView: View {
         // future calorie tracking can populate it without changing the layout.
         WorkoutRecapMetric(title: "Calories", value: workout.calories > 0 ? "\(workout.calories) kcal" : "—", icon: "flame.fill", tint: .orange, detail: workout.calories > 0 ? nil : "Not tracked")
             .accessibilityIdentifier("workoutDetailMetric-Calories")
+    }
+
+    private var healthSyncSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionTitle("Apple Health")
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.text.square.fill")
+                        .font(.title2)
+                        .foregroundStyle(.mint)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Wearable Biometrics")
+                            .font(.subheadline.weight(.semibold))
+                        Text(syncStatusMessage ?? "Attach heart rate, HRV, and active calories from Apple Health or wearable.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("syncBiometricsStatusText")
+                    }
+                    Spacer()
+                }
+
+                Button {
+                    syncBiometrics()
+                } label: {
+                    if isSyncingBiometrics {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .tint(.primary)
+                            Text("Syncing…")
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        Label("Sync Biometrics", systemImage: "arrow.trianglehead.2.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .tint(.mint)
+                .disabled(isSyncingBiometrics)
+                .accessibilityIdentifier("syncBiometricsWorkoutDetailButton")
+            }
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    private func syncBiometrics() {
+        guard !isSyncingBiometrics else { return }
+        isSyncingBiometrics = true
+        Task {
+            do {
+                let result = try await WorkoutHealthKitService.syncRetroactiveBiometrics(for: workout, in: context)
+                if result.heartRateSampleCount == 0 && result.hrvSampleCount == 0 && result.calories == nil {
+                    syncStatusMessage = "No matching HealthKit samples found for this session’s time window."
+                } else {
+                    var parts: [String] = []
+                    if result.heartRateSampleCount > 0 { parts.append("\(result.heartRateSampleCount) HR") }
+                    if result.hrvSampleCount > 0 { parts.append("\(result.hrvSampleCount) HRV") }
+                    if let cals = result.calories { parts.append("\(cals) kcal") }
+                    syncStatusMessage = "Synced \(parts.joined(separator: ", "))"
+                }
+            } catch {
+                syncStatusMessage = "Sync failed: \(error.localizedDescription)"
+            }
+            isSyncingBiometrics = false
+        }
     }
 
     private func deleteWorkout() {

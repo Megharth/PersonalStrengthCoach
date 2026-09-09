@@ -21,7 +21,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Personal Strength Coach reads your sleep, heart, and body measurements to calculate recovery and readiness.</string>
+	<string>Personal Strength Coach reads your sleep, heart, and body measurements to calculate recovery and readiness, and to attach heart-rate data to logged workouts.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Personal Strength Coach saves your strength workouts to Apple Health so they appear alongside data from other apps and devices.</string>
 	<key>AIProxyURL</key>
 	<string>$(AI_PROXY_URL)</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

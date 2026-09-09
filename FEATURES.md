@@ -44,6 +44,7 @@ Tap any workout to see a recap with:
 - **Personal Records** — A highlighted, compact summary of PRs achieved in that session. Up to three records are shown directly; tap the overflow button to reveal any additional records.
 - **Session recap** — Local, factual feedback based only on the session’s recorded sets, volume, and PRs; it does not send a coaching request.
 - **Exercises performed** — Rounded exercise cards in the order exercises were logged or added. Older workouts without stored ordering use a deterministic alphabetical fallback. Each card summarizes set count, working volume, and best eligible set; tap it to expand the session’s individual sets, including set type and optional RPE.
+- **Apple Health & Biometrics Sync** — Tap "Sync Biometrics" to retroactively query Apple Health for Heart Rate, HRV, and Active Calories recorded during that session's time window. If found, samples are attached to the Apple Health workout and untracked calories are saved directly to the workout recap.
 - **Notes** — An imported or otherwise stored note appears in a separate card when present. This screen does not add a note-editing workflow.
 - **Share Workout** — Tap the share icon in the top-right to create a plain-text summary with session stats, exercises, set details, set types, optional RPE, and notes. Weights and total volume use the selected kg/lb display unit. This is separate from the full JSON data export in Settings.
 
@@ -218,9 +219,10 @@ Manage your data and privacy.
 - **Export All Data** — Export your complete completed-workout history (workouts, sets, recovery data, custom exercises, routines) as a JSON file. Unfinished workout drafts are intentionally excluded. Use this for backups or to migrate to another device.
 - **Delete All Local Data** — Permanently erase all workouts, unfinished workout drafts and their saved sets, recovery data, custom exercises, and routines. This cannot be undone. Apple Health data is unaffected.
 - **HealthKit Sync** — The app automatically syncs sleep, HRV, resting heart rate, and body mass from Apple Health on every app launch. If sync fails, you'll see a retry prompt.
+- **Apple Health workouts** — Logging a new workout also starts an Apple Health workout behind the scenes. When you hit Save, the app writes a strength-training entry to Apple Health. A **Sync Biometrics** sheet then lets you pull any heart rate / HRV samples from that session (for example from an Amazfit synced via Zepp) and attach them to the saved workout. This is manual so it captures data even when your wearable hasn't synced yet.
 
 **Privacy & permissions:**
-- **Apple Health permissions** — The app requests read-only access to Sleep, Heart Rate Variability, Resting Heart Rate, and Body Mass. Grant these in Settings → Health → Data Access & Devices → Personal Strength Coach.
+- **Apple Health permissions** — The app requests read access to Sleep, Heart Rate Variability (HRV), Resting Heart Rate, and Body Mass, plus read access to Heart Rate and write access to Workouts (used to save and enrich your logged sessions). Grant these in Settings → Health → Data Access & Devices → Personal Strength Coach.
 - **No account required** — All data lives on-device in SwiftData. Nothing is uploaded to a server (except optional AI coach queries, which only send aggregated metrics).
 - **Dark mode** — The app forces dark mode for better readability during gym sessions.
 

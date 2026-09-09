@@ -9,22 +9,22 @@ enum HealthKitService {
     static func sync(context: ModelContext) async -> HealthKitSyncStatus {
         guard HKHealthStore.isHealthDataAvailable() else { return .unavailable }
 
-        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
-        let hrvType = HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
-        let restingHeartRateType = HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
-        let bodyMassType = HKObjectType.quantityType(forIdentifier: .bodyMass)!
-        let readTypes: Set<HKObjectType> = [sleepType, hrvType, restingHeartRateType, bodyMassType]
+        let types = authorizationTypes()
 
         do {
-            let authorizationStatus = try await store.statusForAuthorizationRequest(toShare: [], read: readTypes)
+            let authorizationStatus = try await store.statusForAuthorizationRequest(toShare: types.share, read: types.read)
             if authorizationStatus == .shouldRequest {
-                try await store.requestAuthorization(toShare: [], read: readTypes)
-                let updatedStatus = try await store.statusForAuthorizationRequest(toShare: [], read: readTypes)
+                try await store.requestAuthorization(toShare: types.share, read: types.read)
+                let updatedStatus = try await store.statusForAuthorizationRequest(toShare: types.share, read: types.read)
                 if updatedStatus == .shouldRequest { return .notDetermined }
             } else if authorizationStatus == .unknown {
                 return .notDetermined
             }
 
+            let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+            let hrvType = WorkoutHealthKitService.hrvType
+            let restingHeartRateType = HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
+            let bodyMassType = HKObjectType.quantityType(forIdentifier: .bodyMass)!
             let start = calendar.date(byAdding: .day, value: -15, to: calendar.startOfDay(for: .now))!
             async let sleepSamples: [HKCategorySample] = samples(of: sleepType, since: start)
             async let hrvSamples: [HKQuantitySample] = samples(of: hrvType, since: start)
@@ -68,6 +68,27 @@ enum HealthKitService {
         } catch {
             return .failed(error.localizedDescription)
         }
+    }
+
+    static func requestWorkoutWriteAuthorization() async {
+        guard !ProcessInfo.processInfo.arguments.contains("-uitesting") else { return }
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let types = authorizationTypes()
+        try? await store.requestAuthorization(toShare: types.share, read: types.read)
+    }
+
+    static func authorizationTypes() -> (share: Set<HKSampleType>, read: Set<HKObjectType>) {
+        let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+        let hrvType = WorkoutHealthKitService.hrvType
+        let restingHeartRateType = HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
+        let bodyMassType = HKObjectType.quantityType(forIdentifier: .bodyMass)!
+        let heartRateType = WorkoutHealthKitService.heartRateType
+        let activeEnergyType = WorkoutHealthKitService.activeEnergyType
+        let workoutType = WorkoutHealthKitService.workoutType
+        return (
+            [workoutType],
+            [sleepType, hrvType, restingHeartRateType, bodyMassType, heartRateType, activeEnergyType]
+        )
     }
 
     private static func samples<T: HKSample>(of type: HKSampleType, since start: Date) async throws -> [T] {
