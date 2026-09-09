@@ -10,6 +10,12 @@ final class WorkoutLoggerUITests: XCTestCase {
         app.launch()
     }
 
+    override func tearDownWithError() throws {
+        app.terminate()
+        app = nil
+        try super.tearDownWithError()
+    }
+
     /// Regression coverage for the `.grouping(.never)` fix: typing digits into
     /// the Weight/Reps fields must replace the value exactly, not duplicate
     /// digits via SwiftUI's live number reformatting.
@@ -183,24 +189,6 @@ final class WorkoutLoggerUITests: XCTestCase {
         assertVerticalOrder(first: "Overhead Press", second: "Barbell Bench Press")
     }
 
-    /// Regression coverage for the workout detail share action. The system share
-    /// sheet's available destinations vary by simulator, so assert only that
-    /// ShareLink presents a system activity view after the tap.
-    func testWorkoutDetailShowsAndPresentsShareAction() throws {
-        app.tabBars.buttons["Workouts"].tap()
-
-        let firstWorkoutRow = app.buttons["workoutRow-0"]
-        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
-        firstWorkoutRow.tap()
-
-        let shareWorkoutButton = app.buttons["shareWorkoutButton"]
-        XCTAssertTrue(shareWorkoutButton.waitForExistence(timeout: 5), "Expected the workout detail share action")
-        shareWorkoutButton.tap()
-
-        let shareSheet = app.otherElements["ActivityListView"]
-        XCTAssertTrue(shareSheet.waitForExistence(timeout: 5), "Expected ShareLink to present the system share sheet")
-    }
-
     /// Regression coverage for committing buffered weight input before the same-tap
     /// completion action. Each set is edited and immediately marked complete while
     /// its keyboard remains active; all three values must survive the final save.
@@ -245,41 +233,6 @@ final class WorkoutLoggerUITests: XCTestCase {
             XCTAssertEqual(weightField.value as? String, weight, "Expected set \(index + 1) weight to persist")
             app.buttons["Collapse set \(index + 1)"].tap()
         }
-    }
-
-    /// Regression coverage for the "Last time" reference banner: editing a set
-    /// with a matching prior-session performance must show the previous
-    /// weight/reps beside the input fields, and tapping Use must copy those
-    /// values into the fields (rather than requiring the user to retype them
-    /// from a caption buried below RPE).
-    func testPreviousSetBannerUseButtonFillsFields() throws {
-        app.tabBars.buttons["Workouts"].tap()
-
-        // Seeded data has two "Pull Day" workouts with a "Barbell Row" exercise;
-        // the most recent one (workoutRow-0) has an older one to reference.
-        let firstWorkoutRow = app.buttons["workoutRow-0"]
-        XCTAssertTrue(firstWorkoutRow.waitForExistence(timeout: 5), "Expected a seeded workout to be visible in Workouts")
-        firstWorkoutRow.tap()
-
-        let editWorkoutButton = app.buttons["editWorkoutButton"]
-        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
-        editWorkoutButton.tap()
-
-        let setRow = app.buttons.matching(identifier: "setRow-0").firstMatch
-        XCTAssertTrue(setRow.waitForExistence(timeout: 5))
-        setRow.tap()
-
-        let weightField = app.textFields["weightField-0"]
-        let repsField = app.textFields["repsField-0"]
-        XCTAssertTrue(weightField.waitForExistence(timeout: 5))
-        XCTAssertEqual(weightField.value as? String, "90", "Sanity check: this workout's own logged weight before using the previous value")
-
-        let useButton = app.buttons["usePreviousSetButton-0"]
-        XCTAssertTrue(useButton.waitForExistence(timeout: 5), "Expected the previous-set reference banner's Use button on the expanded set row")
-        useButton.tap()
-
-        XCTAssertEqual(weightField.value as? String, "87.5", "Expected Use to copy the previous session's weight into the field")
-        XCTAssertEqual(repsField.value as? String, "8", "Expected Use to copy the previous session's reps into the field")
     }
 
     func testSavingWorkoutPresentsSyncBiometricsSheetAndSyncsData() throws {
@@ -399,6 +352,7 @@ final class WorkoutLoggerUITests: XCTestCase {
         var attempts = 0
         while (!element.exists || !element.isHittable) && attempts < maxSwipes {
             scrollListUp()
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
             attempts += 1
         }
         XCTAssertTrue(element.waitForExistence(timeout: 2), "Expected scrolling to bring the element into view")
@@ -408,10 +362,11 @@ final class WorkoutLoggerUITests: XCTestCase {
     /// The dock position can read a stale/mid-animation value for a moment
     /// right after a sheet dismiss or list insert settles; poll until two
     /// consecutive reads agree before trusting it.
-    private func waitForStableMinY(of element: XCUIElement, maxAttempts: Int = 10) -> CGFloat {
+    private func waitForStableMinY(of element: XCUIElement, timeout: TimeInterval = 2.0) -> CGFloat {
         var lastValue = element.frame.minY
-        for _ in 0..<maxAttempts {
-            Thread.sleep(forTimeInterval: 0.2)
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
             let value = element.frame.minY
             if abs(value - lastValue) < 0.5 {
                 return value

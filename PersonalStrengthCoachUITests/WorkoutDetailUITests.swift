@@ -10,6 +10,12 @@ final class WorkoutDetailUITests: XCTestCase {
         app.launch()
     }
 
+    override func tearDownWithError() throws {
+        app.terminate()
+        app = nil
+        try super.tearDownWithError()
+    }
+
     func testWorkoutDetailShowsAllSessionMetricsAndExpandsExercise() throws {
         openSeededWorkout()
 
@@ -49,6 +55,47 @@ final class WorkoutDetailUITests: XCTestCase {
 
         let statusText = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "Synced")).firstMatch
         XCTAssertTrue(statusText.waitForExistence(timeout: 5))
+    }
+
+    func testWorkoutDetailShowsAndPresentsShareAction() throws {
+        openSeededWorkout()
+
+        let shareWorkoutButton = app.buttons["shareWorkoutButton"]
+        XCTAssertTrue(shareWorkoutButton.waitForExistence(timeout: 5), "Expected the workout detail share action")
+        shareWorkoutButton.tap()
+
+        let shareSheet = app.otherElements["ActivityListView"]
+        XCTAssertTrue(shareSheet.waitForExistence(timeout: 5), "Expected ShareLink to present the system share sheet")
+    }
+
+    /// Regression coverage for the "Last time" reference banner: editing a set
+    /// with a matching prior-session performance must show the previous
+    /// weight/reps beside the input fields, and tapping Use must copy those
+    /// values into the fields (rather than requiring the user to retype them
+    /// from a caption buried below RPE). Relies on the two seeded Pull Day
+    /// workouts — workoutRow-0 references workoutRow-3's Barbell Row sets.
+    func testPreviousSetBannerUseButtonFillsFields() throws {
+        openSeededWorkout()
+
+        let editWorkoutButton = app.buttons["editWorkoutButton"]
+        XCTAssertTrue(editWorkoutButton.waitForExistence(timeout: 5))
+        editWorkoutButton.tap()
+
+        let setRow = app.buttons.matching(identifier: "setRow-0").firstMatch
+        XCTAssertTrue(setRow.waitForExistence(timeout: 5))
+        setRow.tap()
+
+        let weightField = app.textFields["weightField-0"]
+        let repsField = app.textFields["repsField-0"]
+        XCTAssertTrue(weightField.waitForExistence(timeout: 5))
+        XCTAssertEqual(weightField.value as? String, "90", "Sanity check: this workout's own logged weight before using the previous value")
+
+        let useButton = app.buttons["usePreviousSetButton-0"]
+        XCTAssertTrue(useButton.waitForExistence(timeout: 5), "Expected the previous-set reference banner's Use button on the expanded set row")
+        useButton.tap()
+
+        XCTAssertEqual(weightField.value as? String, "87.5", "Expected Use to copy the previous session's weight into the field")
+        XCTAssertEqual(repsField.value as? String, "8", "Expected Use to copy the previous session's reps into the field")
     }
 
     private func openSeededWorkout() {

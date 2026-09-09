@@ -10,6 +10,12 @@ final class RoutinesUITests: XCTestCase {
         app.launch()
     }
 
+    override func tearDownWithError() throws {
+        app.terminate()
+        app = nil
+        try super.tearDownWithError()
+    }
+
     /// Regression coverage for moving "start from routine" out of the workout
     /// logger and onto the Routines list: swiping a routine row and tapping
     /// Start must open the logger pre-filled with that routine's exercises,

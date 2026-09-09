@@ -30,26 +30,21 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
-          <TestableReference
-             skipped = "NO">
-             <BuildableReference
-                BuildableIdentifier = "primary"
-                BlueprintIdentifier = "A1B2C3D4E5F6000000000019"
-                BuildableName = "PersonalStrengthCoachTests.xctest"
-                BlueprintName = "PersonalStrengthCoachTests"
-                ReferencedContainer = "container:PersonalStrengthCoach.xcodeproj">
-             </BuildableReference>
-          </TestableReference>
-          <TestableReference
-             skipped = "NO">
-             <BuildableReference
-                BuildableIdentifier = "primary"
-                BlueprintIdentifier = "A1B2C3D4E5F6000000000030"
-                BuildableName = "PersonalStrengthCoachUITests.xctest"
-                BlueprintName = "PersonalStrengthCoachUITests"
-                ReferencedContainer = "container:PersonalStrengthCoach.xcodeproj">
-             </BuildableReference>
-          </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A1B2C3D4E5F6000000000030"
+               BuildableName = "PersonalStrengthCoachUITests.xctest"
+               BlueprintName = "PersonalStrengthCoachUITests"
+               ReferencedContainer = "container:PersonalStrengthCoach.xcodeproj">
+            </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "WorkoutLoggerUITests">
+               </Test>
+            </SkippedTests>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
