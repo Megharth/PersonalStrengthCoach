@@ -58,4 +58,54 @@ final class WorkoutHealthKitServiceTests: XCTestCase {
         XCTAssertNotEqual(WorkoutHealthKitService.SyncState.failed("error 1"), .failed("error 2"))
         XCTAssertNotEqual(WorkoutHealthKitService.SyncState.idle, .syncing)
     }
+
+    func testSourceMetadataConstantsHaveExpectedValues() {
+        XCTAssertEqual(WorkoutHealthKitService.sourceMetadataKey, "Source")
+        XCTAssertEqual(WorkoutHealthKitService.sourceMetadataValue, "PersonalStrengthCoach")
+    }
+
+    func testFilterOwnedWorkoutsKeepsOnlyPersonalStrengthCoachSource() {
+        let start = Date()
+        let end = start.addingTimeInterval(3600)
+        let key = WorkoutHealthKitService.sourceMetadataKey
+        let value = WorkoutHealthKitService.sourceMetadataValue
+        let ours = HKWorkout(activityType: .traditionalStrengthTraining, start: start, end: end,
+                             duration: 3600, totalEnergyBurned: nil, totalDistance: nil,
+                             metadata: [key: value])
+        let theirs = HKWorkout(activityType: .traditionalStrengthTraining, start: start, end: end,
+                               duration: 3600, totalEnergyBurned: nil, totalDistance: nil,
+                               metadata: [key: "SomeOtherApp"])
+        let noMetadata = HKWorkout(activityType: .traditionalStrengthTraining, start: start, end: end,
+                                   duration: 3600, totalEnergyBurned: nil, totalDistance: nil,
+                                   metadata: nil)
+
+        let result = WorkoutHealthKitService.filterOwnedWorkouts([ours, theirs, noMetadata])
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result.first?.metadata?[key] as? String, value)
+    }
+
+    func testFilterOwnedWorkoutsReturnsEmptyWhenNoneMatch() {
+        let start = Date()
+        let end = start.addingTimeInterval(3600)
+        let theirs = HKWorkout(activityType: .traditionalStrengthTraining, start: start, end: end,
+                               duration: 3600, totalEnergyBurned: nil, totalDistance: nil,
+                               metadata: [WorkoutHealthKitService.sourceMetadataKey: "SomeOtherApp"])
+
+        let result = WorkoutHealthKitService.filterOwnedWorkouts([theirs])
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testFilterOwnedWorkoutsReturnsEmptyForEmptyInput() {
+        XCTAssertTrue(WorkoutHealthKitService.filterOwnedWorkouts([]).isEmpty)
+    }
+
+    func testDeleteWorkoutIsNoOpUnderUITesting() async throws {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-uitesting") else {
+            throw XCTSkip("Only runs under the -uitesting flag")
+        }
+        try await WorkoutHealthKitService.deleteWorkout(startDate: Date(), durationMinutes: 60)
+    }
 }

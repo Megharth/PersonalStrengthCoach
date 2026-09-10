@@ -29,6 +29,8 @@ final class WorkoutHealthKitService: ObservableObject {
     static var heartRateType: HKQuantityType { HKObjectType.quantityType(forIdentifier: .heartRate)! }
     static var hrvType: HKQuantityType { HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)! }
     static var activeEnergyType: HKQuantityType { HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)! }
+    static let sourceMetadataKey = "Source"
+    static let sourceMetadataValue = "PersonalStrengthCoach"
 
     func startWorkout(at date: Date) async {
         guard !ProcessInfo.processInfo.arguments.contains("-uitesting") else {
@@ -165,7 +167,7 @@ final class WorkoutHealthKitService: ObservableObject {
                 duration: durationSeconds,
                 totalEnergyBurned: totalCalorieQuantity,
                 totalDistance: nil,
-                metadata: ["Source": "PersonalStrengthCoach"]
+                metadata: [Self.sourceMetadataKey: Self.sourceMetadataValue]
             )
             try await saveObject(newWorkout)
             targetWorkout = newWorkout
@@ -199,6 +201,40 @@ final class WorkoutHealthKitService: ObservableObject {
             hrvSampleCount: hrv.count,
             calories: updatedCalories ?? (workout.calories > 0 ? workout.calories : nil)
         )
+    }
+
+    static func deleteWorkout(startDate: Date, durationMinutes: Int) async throws {
+        guard !ProcessInfo.processInfo.arguments.contains("-uitesting") else { return }
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        await HealthKitService.requestWorkoutWriteAuthorization()
+
+        let durationSeconds = TimeInterval(max(1, durationMinutes) * 60)
+        let endDate = startDate.addingTimeInterval(durationSeconds)
+        let predicate = HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: [])
+
+        let candidates: [HKWorkout] = try await querySamples(of: workoutType, predicate: predicate)
+        let ours = Self.filterOwnedWorkouts(candidates)
+        guard !ours.isEmpty else { return }
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            store.delete(ours) { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: NSError(
+                        domain: "WorkoutHealthKitService",
+                        code: 4,
+                        userInfo: [NSLocalizedDescriptionKey: "Failed to delete workout from Apple Health."]
+                    ))
+                }
+            }
+        }
+    }
+
+    static func filterOwnedWorkouts(_ candidates: [HKWorkout]) -> [HKWorkout] {
+        candidates.filter { $0.metadata?[Self.sourceMetadataKey] as? String == Self.sourceMetadataValue }
     }
 
     private static func saveObject(_ object: HKObject) async throws {

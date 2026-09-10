@@ -206,7 +206,7 @@ struct WorkoutsView: View {
                 workoutPendingDeletion = nil
             }
             Button("Cancel", role: .cancel) { workoutPendingDeletion = nil }
-        } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
+        } message: { Text("This permanently removes the session and all of its sets, and deletes the matching workout from Apple Health. This can’t be undone.") }
         .alert("Couldn’t update workouts", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) { }
         } message: { Text(errorMessage ?? "Please try again.") }
@@ -233,6 +233,8 @@ struct WorkoutsView: View {
     }
 
     private func delete(_ workout: Workout) {
+        let startDate = workout.date
+        let durationMinutes = workout.durationMinutes
         context.delete(workout)     // cascade removes its ExerciseSet rows
         do {
             try context.save()
@@ -240,6 +242,15 @@ struct WorkoutsView: View {
             logger.error("Workout delete failed")
             context.rollback()
             errorMessage = "The workout could not be deleted."
+            return
+        }
+        Task {
+            do {
+                try await WorkoutHealthKitService.deleteWorkout(startDate: startDate, durationMinutes: durationMinutes)
+            } catch {
+                logger.error("HealthKit workout delete failed: \(error.localizedDescription)")
+                errorMessage = "Workout deleted, but couldn't remove it from Apple Health. You can delete it there manually."
+            }
         }
     }
 }
@@ -290,6 +301,7 @@ struct WorkoutDetailView: View {
     @State private var showingEditor = false
     @State private var showingDeleteConfirmation = false
     @State private var deleteError: String?
+    @State private var isDeletingWorkout = false
     @State private var isSyncingBiometrics = false
     @State private var syncStatusMessage: String?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
@@ -365,12 +377,18 @@ struct WorkoutDetailView: View {
                 Button(role: .destructive) {
                     showingDeleteConfirmation = true
                 } label: {
-                    Text("Delete Workout")
-                        .frame(maxWidth: .infinity)
+                    if isDeletingWorkout {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Delete Workout")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .tint(.red)
+                .disabled(isDeletingWorkout)
                 .accessibilityIdentifier("deleteWorkoutButton")
                 .padding(.top, 4)
             }
@@ -394,7 +412,7 @@ struct WorkoutDetailView: View {
         .confirmationDialog("Delete workout?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
             Button("Delete Workout", role: .destructive) { deleteWorkout() }
             Button("Cancel", role: .cancel) { }
-        } message: { Text("This permanently removes the session and all of its sets. This can’t be undone.") }
+        } message: { Text("This permanently removes the session and all of its sets, and deletes the matching workout from Apple Health. This can’t be undone.") }
         .alert("Couldn’t delete workout", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
             Button("OK", role: .cancel) { }
         } message: { Text(deleteError ?? "Please try again.") }
@@ -501,14 +519,27 @@ struct WorkoutDetailView: View {
     }
 
     private func deleteWorkout() {
+        let startDate = workout.date
+        let durationMinutes = workout.durationMinutes
         context.delete(workout)     // cascade removes its ExerciseSet rows
         do {
             try context.save()
-            dismiss()
         } catch {
             logger.error("Workout delete failed")
             context.rollback()
             deleteError = "The workout could not be deleted."
+            return
+        }
+        isDeletingWorkout = true
+        Task {
+            do {
+                try await WorkoutHealthKitService.deleteWorkout(startDate: startDate, durationMinutes: durationMinutes)
+                dismiss()
+            } catch {
+                logger.error("HealthKit workout delete failed: \(error.localizedDescription)")
+                isDeletingWorkout = false
+                deleteError = "Workout deleted, but couldn't remove it from Apple Health. You can delete it there manually."
+            }
         }
     }
 }
