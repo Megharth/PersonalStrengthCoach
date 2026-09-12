@@ -1011,6 +1011,10 @@ struct SyncBiometricsView: View {
     @ObservedObject var hkService: WorkoutHealthKitService
     let workoutStart: Date
     let workoutEnd: Date
+    @State private var dayWorkouts: [WorkoutHealthKitService.HKWorkoutSummary] = []
+    @State private var selectedWorkoutID: UUID?
+    @State private var isFetchingWorkouts = false
+    @State private var fetchError: String?
 
     var body: some View {
         NavigationStack {
@@ -1023,9 +1027,28 @@ struct SyncBiometricsView: View {
                 VStack(spacing: 8) {
                     Text("Sync Biometrics")
                         .font(.title2.weight(.bold))
-                    Text("After your wearable app has synced to Apple Health, tap below to attach heart rate and HRV from this session.")
+                    Text("After your wearable app has synced to Apple Health, choose which workout to attach heart rate and HRV from.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                if WorkoutHealthKitService.requiresManualSelection(among: dayWorkouts) {
+                    VStack(spacing: 12) {
+                        Text("Choose the matching workout")
+                            .font(.headline)
+                        ForEach(dayWorkouts) { summary in
+                            workoutRow(summary)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+
+                if let fetchError {
+                    Text("Couldn't load workouts: \(fetchError)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
@@ -1048,7 +1071,57 @@ struct SyncBiometricsView: View {
                         .accessibilityIdentifier("syncBiometricsToolbarDoneButton")
                 }
             }
+            .task { await fetchDayWorkouts() }
         }
+    }
+
+    private func workoutRow(_ summary: WorkoutHealthKitService.HKWorkoutSummary) -> some View {
+        Button {
+            selectedWorkoutID = summary.uuid
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: selectedWorkoutID == summary.uuid ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selectedWorkoutID == summary.uuid ? .mint : .secondary)
+                    .font(.title2)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(summary.activityName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("·")
+                            .foregroundStyle(.secondary)
+                        Text(summary.sourceName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("\(summary.startDate.formatted(date: .omitted, time: .shortened)) – \(summary.endDate.formatted(date: .omitted, time: .shortened))  ·  \(summary.durationMinutes) min")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(selectedWorkoutID == summary.uuid ? Color.mint : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("syncWorkoutOption-\(summary.uuid.uuidString)")
+    }
+
+    private func fetchDayWorkouts() async {
+        guard !isFetchingWorkouts else { return }
+        isFetchingWorkouts = true
+        fetchError = nil
+        do {
+            dayWorkouts = try await WorkoutHealthKitService.workoutsForDay(workoutStart)
+            selectedWorkoutID = WorkoutHealthKitService.defaultSelection(among: dayWorkouts)
+        } catch {
+            fetchError = error.localizedDescription
+        }
+        isFetchingWorkouts = false
     }
 
     @ViewBuilder
@@ -1056,7 +1129,8 @@ struct SyncBiometricsView: View {
         switch hkService.syncState {
         case .idle:
             Button {
-                Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd) }
+                let chosenWorkout = dayWorkouts.first { $0.uuid == selectedWorkoutID }
+                Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd, linking: chosenWorkout) }
             } label: {
                 Label("Sync from Apple Health", systemImage: "arrow.trianglehead.2.clockwise")
                     .frame(maxWidth: .infinity)
@@ -1097,7 +1171,8 @@ struct SyncBiometricsView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                 Button {
-                    Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd) }
+                    let chosenWorkout = dayWorkouts.first { $0.uuid == selectedWorkoutID }
+                    Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd, linking: chosenWorkout) }
                 } label: {
                     Label("Try Again", systemImage: "arrow.clockwise")
                         .frame(maxWidth: .infinity)

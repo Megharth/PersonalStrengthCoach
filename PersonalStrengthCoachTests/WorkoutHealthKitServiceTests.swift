@@ -28,6 +28,11 @@ final class WorkoutHealthKitServiceTests: XCTestCase {
         XCTAssertTrue(types.read.contains(HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!))
     }
 
+    func testHealthKitAuthorizationTypesIncludesWorkoutRead() {
+        let types = HealthKitService.authorizationTypes()
+        XCTAssertTrue(types.read.contains(WorkoutHealthKitService.workoutType))
+    }
+
     func testRetroactiveSyncResultEquality() {
         let result1 = WorkoutHealthKitService.RetroactiveSyncResult(heartRateSampleCount: 15, hrvSampleCount: 3, calories: 250)
         let result2 = WorkoutHealthKitService.RetroactiveSyncResult(heartRateSampleCount: 15, hrvSampleCount: 3, calories: 250)
@@ -107,5 +112,156 @@ final class WorkoutHealthKitServiceTests: XCTestCase {
             throw XCTSkip("Only runs under the -uitesting flag")
         }
         try await WorkoutHealthKitService.deleteWorkout(startDate: Date(), durationMinutes: 60)
+    }
+
+    func testHKWorkoutSummaryEquality() {
+        let uuid1 = UUID()
+        let uuid2 = UUID()
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(3600)
+        let a = WorkoutHealthKitService.HKWorkoutSummary(uuid: uuid1, startDate: start, endDate: end, activityType: .traditionalStrengthTraining, sourceName: "Apple Watch")
+        let b = WorkoutHealthKitService.HKWorkoutSummary(uuid: uuid1, startDate: start, endDate: end, activityType: .traditionalStrengthTraining, sourceName: "Apple Watch")
+        let c = WorkoutHealthKitService.HKWorkoutSummary(uuid: uuid2, startDate: start, endDate: end, activityType: .traditionalStrengthTraining, sourceName: "Apple Watch")
+
+        XCTAssertEqual(a, b)
+        XCTAssertNotEqual(a, c)
+    }
+
+    func testHKWorkoutSummaryDisplayNameStrengthTraining() {
+        let summary = WorkoutHealthKitService.HKWorkoutSummary(
+            uuid: UUID(),
+            startDate: Date(timeIntervalSince1970: 1_000_000),
+            endDate: Date(timeIntervalSince1970: 1_003_600),
+            activityType: .traditionalStrengthTraining,
+            sourceName: "Amazfit"
+        )
+        XCTAssertEqual(summary.activityName, "Traditional Strength Training")
+        XCTAssertEqual(summary.sourceName, "Amazfit")
+    }
+
+    func testHKWorkoutSummaryDisplayNameFunctionalStrength() {
+        let summary = WorkoutHealthKitService.HKWorkoutSummary(
+            uuid: UUID(),
+            startDate: Date(timeIntervalSince1970: 1_000_000),
+            endDate: Date(timeIntervalSince1970: 1_003_600),
+            activityType: .functionalStrengthTraining,
+            sourceName: "Zepp"
+        )
+        XCTAssertEqual(summary.activityName, "Functional Strength Training")
+    }
+
+    func testHKWorkoutSummaryDurationMinutes() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(75 * 60)
+        let summary = WorkoutHealthKitService.HKWorkoutSummary(
+            uuid: UUID(),
+            startDate: start,
+            endDate: end,
+            activityType: .traditionalStrengthTraining,
+            sourceName: "Apple Watch"
+        )
+        XCTAssertEqual(summary.durationMinutes, 75)
+    }
+
+    func testHKWorkoutSummaryDurationRoundsDown() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(90 * 60 + 45)
+        let summary = WorkoutHealthKitService.HKWorkoutSummary(
+            uuid: UUID(),
+            startDate: start,
+            endDate: end,
+            activityType: .traditionalStrengthTraining,
+            sourceName: "Apple Watch"
+        )
+        XCTAssertEqual(summary.durationMinutes, 90)
+    }
+
+    func testBuildWorkoutSummariesFromHKWorkouts() {
+        let start1 = Date(timeIntervalSince1970: 1_000_000)
+        let end1 = start1.addingTimeInterval(3600)
+        let start2 = Date(timeIntervalSince1970: 1_010_000)
+        let end2 = start2.addingTimeInterval(2700)
+
+        let hkWorkout1 = HKWorkout(activityType: .traditionalStrengthTraining,
+                                   start: start1, end: end1, duration: 3600,
+                                   totalEnergyBurned: nil, totalDistance: nil,
+                                   metadata: nil)
+        let hkWorkout2 = HKWorkout(activityType: .functionalStrengthTraining,
+                                   start: start2, end: end2, duration: 2700,
+                                   totalEnergyBurned: nil, totalDistance: nil,
+                                   metadata: nil)
+
+        let summaries = WorkoutHealthKitService.buildSummaries(from: [hkWorkout1, hkWorkout2])
+
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertEqual(summaries[0].startDate, start1)
+        XCTAssertEqual(summaries[0].endDate, end1)
+        XCTAssertEqual(summaries[0].activityType, .traditionalStrengthTraining)
+        XCTAssertEqual(summaries[1].startDate, start2)
+        XCTAssertEqual(summaries[1].activityType, .functionalStrengthTraining)
+    }
+
+    func testBuildWorkoutSummariesPreservesUUID() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(3600)
+        let hkWorkout = HKWorkout(activityType: .traditionalStrengthTraining,
+                                  start: start, end: end, duration: 3600,
+                                  totalEnergyBurned: nil, totalDistance: nil,
+                                  metadata: nil)
+
+        let summaries = WorkoutHealthKitService.buildSummaries(from: [hkWorkout])
+
+        XCTAssertEqual(summaries.count, 1)
+        XCTAssertEqual(summaries[0].uuid, hkWorkout.uuid)
+    }
+
+    func testBuildWorkoutSummariesSourceNameFromSourceRevision() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(3600)
+        let hkWorkout = HKWorkout(activityType: .traditionalStrengthTraining,
+                                  start: start, end: end, duration: 3600,
+                                  totalEnergyBurned: nil, totalDistance: nil,
+                                  metadata: nil)
+
+        let summaries = WorkoutHealthKitService.buildSummaries(from: [hkWorkout])
+
+        XCTAssertFalse(summaries[0].sourceName.isEmpty)
+    }
+
+    func testBuildWorkoutSummariesEmptyInput() {
+        let summaries = WorkoutHealthKitService.buildSummaries(from: [])
+        XCTAssertTrue(summaries.isEmpty)
+    }
+
+    func testRequiresManualSelectionTrueWhenMultiple() {
+        let s = [
+            WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "A"),
+            WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "B")
+        ]
+        XCTAssertTrue(WorkoutHealthKitService.requiresManualSelection(among: s))
+    }
+
+    func testRequiresManualSelectionFalseWhenZeroOrOne() {
+        XCTAssertFalse(WorkoutHealthKitService.requiresManualSelection(among: []))
+        let single = [WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "A")]
+        XCTAssertFalse(WorkoutHealthKitService.requiresManualSelection(among: single))
+    }
+
+    func testDefaultSelectionReturnsOnlyCandidate() {
+        let single = [WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "A")]
+        let uuid = single[0].uuid
+        XCTAssertEqual(WorkoutHealthKitService.defaultSelection(among: single), uuid)
+    }
+
+    func testDefaultSelectionReturnsNilWhenMultiple() {
+        let multiple = [
+            WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "A"),
+            WorkoutHealthKitService.HKWorkoutSummary(uuid: UUID(), startDate: Date(), endDate: Date().addingTimeInterval(3600), activityType: .traditionalStrengthTraining, sourceName: "B")
+        ]
+        XCTAssertNil(WorkoutHealthKitService.defaultSelection(among: multiple))
+    }
+
+    func testDefaultSelectionReturnsNilWhenEmpty() {
+        XCTAssertNil(WorkoutHealthKitService.defaultSelection(among: []))
     }
 }

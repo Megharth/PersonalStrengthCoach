@@ -87,7 +87,7 @@ enum HealthKitService {
         let workoutType = WorkoutHealthKitService.workoutType
         return (
             [workoutType],
-            [sleepType, hrvType, restingHeartRateType, bodyMassType, heartRateType, activeEnergyType]
+            [sleepType, hrvType, restingHeartRateType, bodyMassType, heartRateType, activeEnergyType, workoutType]
         )
     }
 

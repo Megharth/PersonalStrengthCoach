@@ -304,6 +304,10 @@ struct WorkoutDetailView: View {
     @State private var isDeletingWorkout = false
     @State private var isSyncingBiometrics = false
     @State private var syncStatusMessage: String?
+    @State private var dayWorkouts: [WorkoutHealthKitService.HKWorkoutSummary] = []
+    @State private var selectedHealthWorkoutID: UUID?
+    @State private var isFetchingDayWorkouts = false
+    @State private var fetchError: String?
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
     private var groupedExercises: [(name: String, sets: [ExerciseSet])] {
         Dictionary(grouping: workout.sets, by: \.normalizedExercise)
@@ -470,6 +474,24 @@ struct WorkoutDetailView: View {
                     Spacer()
                 }
 
+                if WorkoutHealthKitService.requiresManualSelection(among: dayWorkouts) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Which workout is this?")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        ForEach(dayWorkouts) { summary in
+                            healthWorkoutRow(summary)
+                        }
+                    }
+                }
+
+                if let fetchError {
+                    Text("Couldn't load workouts: \(fetchError)")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                }
+
                 Button {
                     syncBiometrics()
                 } label: {
@@ -494,14 +516,57 @@ struct WorkoutDetailView: View {
             .padding(14)
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
         }
+        .task { await fetchDayWorkoutsForHealthSync() }
+    }
+
+    private func healthWorkoutRow(_ summary: WorkoutHealthKitService.HKWorkoutSummary) -> some View {
+        Button {
+            selectedHealthWorkoutID = summary.uuid
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selectedHealthWorkoutID == summary.uuid ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selectedHealthWorkoutID == summary.uuid ? .mint : .secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(summary.activityName) · \(summary.sourceName)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("\(summary.startDate.formatted(date: .omitted, time: .shortened)) – \(summary.endDate.formatted(date: .omitted, time: .shortened))  ·  \(summary.durationMinutes) min")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(selectedHealthWorkoutID == summary.uuid ? Color.mint : Color.clear, lineWidth: 2)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("healthWorkoutOption-\(summary.uuid.uuidString)")
+    }
+
+    private func fetchDayWorkoutsForHealthSync() async {
+        guard !isFetchingDayWorkouts, dayWorkouts.isEmpty else { return }
+        isFetchingDayWorkouts = true
+        fetchError = nil
+        do {
+            dayWorkouts = try await WorkoutHealthKitService.workoutsForDay(workout.date)
+            selectedHealthWorkoutID = WorkoutHealthKitService.defaultSelection(among: dayWorkouts)
+        } catch {
+            fetchError = error.localizedDescription
+        }
+        isFetchingDayWorkouts = false
     }
 
     private func syncBiometrics() {
         guard !isSyncingBiometrics else { return }
         isSyncingBiometrics = true
+        let linkedUUID = selectedHealthWorkoutID
         Task {
             do {
-                let result = try await WorkoutHealthKitService.syncRetroactiveBiometrics(for: workout, in: context)
+                let result = try await WorkoutHealthKitService.syncRetroactiveBiometrics(for: workout, in: context, linking: linkedUUID)
                 if result.heartRateSampleCount == 0 && result.hrvSampleCount == 0 && result.calories == nil {
                     syncStatusMessage = "No matching HealthKit samples found for this session’s time window."
                 } else {
