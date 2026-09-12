@@ -521,7 +521,7 @@ struct WorkoutDetailView: View {
 
     private func healthWorkoutRow(_ summary: WorkoutHealthKitService.HKWorkoutSummary) -> some View {
         Button {
-            selectedHealthWorkoutID = summary.uuid
+            selectHealthWorkout(summary.uuid)
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: selectedHealthWorkoutID == summary.uuid ? "checkmark.circle.fill" : "circle")
@@ -553,17 +553,35 @@ struct WorkoutDetailView: View {
         fetchError = nil
         do {
             dayWorkouts = try await WorkoutHealthKitService.workoutsForDay(workout.date)
-            selectedHealthWorkoutID = WorkoutHealthKitService.defaultSelection(among: dayWorkouts)
+            selectedHealthWorkoutID = WorkoutHealthKitService.resolvedSelection(
+                persisted: workout.linkedHealthKitWorkoutUUID,
+                among: dayWorkouts
+            )
         } catch {
             fetchError = error.localizedDescription
         }
         isFetchingDayWorkouts = false
     }
 
+    private func selectHealthWorkout(_ uuid: UUID) {
+        selectedHealthWorkoutID = uuid
+        guard workout.linkedHealthKitWorkoutUUID != uuid else { return }
+        workout.linkedHealthKitWorkoutUUID = uuid
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            logger.error("Linking the Health workout failed")
+        }
+    }
+
     private func syncBiometrics() {
         guard !isSyncingBiometrics else { return }
         isSyncingBiometrics = true
         let linkedUUID = selectedHealthWorkoutID
+        if let linkedUUID {
+            selectHealthWorkout(linkedUUID)
+        }
         Task {
             do {
                 let result = try await WorkoutHealthKitService.syncRetroactiveBiometrics(for: workout, in: context, linking: linkedUUID)

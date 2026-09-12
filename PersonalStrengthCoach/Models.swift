@@ -25,11 +25,13 @@ final class Workout {
     var durationMinutes: Int
     var calories: Int
     var notes: String
+    var linkedHealthKitWorkoutUUID: UUID?
     @Relationship(deleteRule: .cascade, inverse: \ExerciseSet.workout) var sets: [ExerciseSet]
 
-    init(date: Date = .now, title: String, durationMinutes: Int, calories: Int = 0, notes: String = "", sets: [ExerciseSet] = []) {
+    init(date: Date = .now, title: String, durationMinutes: Int, calories: Int = 0, notes: String = "", linkedHealthKitWorkoutUUID: UUID? = nil, sets: [ExerciseSet] = []) {
         self.date = date; self.title = title; self.durationMinutes = durationMinutes
-        self.calories = calories; self.notes = notes; self.sets = sets
+        self.calories = calories; self.notes = notes
+        self.linkedHealthKitWorkoutUUID = linkedHealthKitWorkoutUUID; self.sets = sets
     }
     var volume: Double {
         sets.reduce(0) { total, set in

@@ -104,7 +104,7 @@ final class HealthKitIngestionTests: XCTestCase {
         }
 
         let migrated = try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(url: url)
         )
@@ -149,7 +149,7 @@ final class HealthKitIngestionTests: XCTestCase {
         }
 
         let migrated = try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(url: url)
         )
@@ -187,7 +187,7 @@ final class HealthKitIngestionTests: XCTestCase {
         }
 
         let migrated = try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(url: url)
         )
@@ -212,7 +212,7 @@ final class HealthKitIngestionTests: XCTestCase {
 
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )

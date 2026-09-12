@@ -15,9 +15,9 @@ struct PersonalStrengthCoachApp: App {
                 // manual testing on the same simulator can't leak into a run.
                 UserDefaults.standard.removeObject(forKey: "weightUnit")
                 let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-                container = try ModelContainer(for: Schema(AppSchemaV6.models), configurations: configuration)
+                container = try ModelContainer(for: Schema(AppSchemaV7.models), configurations: configuration)
             } else {
-                container = try ModelContainer(for: Schema(AppSchemaV6.models), migrationPlan: AppMigrationPlan.self)
+                container = try ModelContainer(for: Schema(AppSchemaV7.models), migrationPlan: AppMigrationPlan.self)
             }
         } catch {
             fatalError("Could not create the data store: \(error)")

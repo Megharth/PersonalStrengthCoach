@@ -1,11 +1,17 @@
 # Personal Strength Coach — Feature Spec
 
-**Status:** Active · **Last updated:** 2026-08-23
+**Status:** Active · **Last updated:** 2026-09-11
 
 ## Current focus
 
 **Next explicitly sequenced item:** P1 Analytics — **Per-exercise progress
 screen** (remaining chart, rep-max, confidence, and PR-timeline work).
+
+**Most recent landed work (out-of-band bug fix, 2026-09-11):** the Apple Health
+workout chosen during biometrics sync is now persisted on the `Workout`
+(`linkedHealthKitWorkoutUUID`, schema V7), so the selection survives leaving and
+re-entering the screen instead of resetting to unselected. This did not consume a
+sequenced item; the next item above is unchanged.
 
 **Other open queues:** P1 Analytics (progress-screen completion, weekly volume
 per muscle, and PR history) and P1 Platform Integration (widgets, notifications,

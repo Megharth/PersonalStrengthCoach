@@ -227,7 +227,7 @@ final class WorkoutSharingTests: XCTestCase {
 final class WorkoutEditingPersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )

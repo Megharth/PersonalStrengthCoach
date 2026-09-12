@@ -146,7 +146,7 @@ final class RoutineEngineBuildWorkoutTests: XCTestCase {
 final class RoutinePersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
@@ -160,7 +160,7 @@ final class RoutinePersistenceTests: XCTestCase {
     }
 
     func testCurrentSchemaIncludesTopLevelRoutineAndRoutineExerciseModels() {
-        let currentTypes = Set(AppSchemaV6.models.map { ObjectIdentifier($0) })
+        let currentTypes = Set(AppSchemaV7.models.map { ObjectIdentifier($0) })
         XCTAssertTrue(currentTypes.contains(ObjectIdentifier(Routine.self)))
         XCTAssertTrue(currentTypes.contains(ObjectIdentifier(RoutineExercise.self)))
 

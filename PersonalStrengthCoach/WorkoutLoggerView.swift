@@ -128,6 +128,7 @@ struct WorkoutLoggerView: View {
     @State private var showingSyncBiometrics = false
     @State private var savedWorkoutStart: Date?
     @State private var savedWorkoutEnd: Date?
+    @State private var savedWorkout: Workout?
     @StateObject private var hkService = WorkoutHealthKitService()
     @AppStorage("weightUnit") private var weightUnitRawValue = WeightUnit.defaultUnit.rawValue
     private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
@@ -240,7 +241,7 @@ struct WorkoutLoggerView: View {
             dismiss()
         }) {
             if let start = savedWorkoutStart, let end = savedWorkoutEnd {
-                SyncBiometricsView(hkService: hkService, workoutStart: start, workoutEnd: end)
+                SyncBiometricsView(hkService: hkService, workout: savedWorkout, workoutStart: start, workoutEnd: end)
             }
         }
     }
@@ -487,6 +488,7 @@ struct WorkoutLoggerView: View {
                 try context.save()
                 savedWorkoutStart = sessionStart
                 savedWorkoutEnd = Date.now
+                savedWorkout = targetWorkout
                 showingSyncBiometrics = true
             } else {
                 dismiss()
@@ -1008,13 +1010,16 @@ struct NewExerciseView: View {
 
 struct SyncBiometricsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
     @ObservedObject var hkService: WorkoutHealthKitService
+    let workout: Workout?
     let workoutStart: Date
     let workoutEnd: Date
     @State private var dayWorkouts: [WorkoutHealthKitService.HKWorkoutSummary] = []
     @State private var selectedWorkoutID: UUID?
     @State private var isFetchingWorkouts = false
     @State private var fetchError: String?
+    private let logger = Logger(subsystem: "com.personalstrengthcoach.app", category: "Persistence")
 
     var body: some View {
         NavigationStack {
@@ -1077,7 +1082,7 @@ struct SyncBiometricsView: View {
 
     private func workoutRow(_ summary: WorkoutHealthKitService.HKWorkoutSummary) -> some View {
         Button {
-            selectedWorkoutID = summary.uuid
+            selectWorkout(summary.uuid)
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: selectedWorkoutID == summary.uuid ? "checkmark.circle.fill" : "circle")
@@ -1117,11 +1122,26 @@ struct SyncBiometricsView: View {
         fetchError = nil
         do {
             dayWorkouts = try await WorkoutHealthKitService.workoutsForDay(workoutStart)
-            selectedWorkoutID = WorkoutHealthKitService.defaultSelection(among: dayWorkouts)
+            selectedWorkoutID = WorkoutHealthKitService.resolvedSelection(
+                persisted: workout?.linkedHealthKitWorkoutUUID,
+                among: dayWorkouts
+            )
         } catch {
             fetchError = error.localizedDescription
         }
         isFetchingWorkouts = false
+    }
+
+    private func selectWorkout(_ uuid: UUID) {
+        selectedWorkoutID = uuid
+        guard let workout, workout.linkedHealthKitWorkoutUUID != uuid else { return }
+        workout.linkedHealthKitWorkoutUUID = uuid
+        do {
+            try context.save()
+        } catch {
+            context.rollback()
+            logger.error("Linking the Health workout failed")
+        }
     }
 
     @ViewBuilder
@@ -1130,6 +1150,7 @@ struct SyncBiometricsView: View {
         case .idle:
             Button {
                 let chosenWorkout = dayWorkouts.first { $0.uuid == selectedWorkoutID }
+                if let chosenWorkout { selectWorkout(chosenWorkout.uuid) }
                 Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd, linking: chosenWorkout) }
             } label: {
                 Label("Sync from Apple Health", systemImage: "arrow.trianglehead.2.clockwise")
@@ -1172,6 +1193,7 @@ struct SyncBiometricsView: View {
                     .padding(.horizontal)
                 Button {
                     let chosenWorkout = dayWorkouts.first { $0.uuid == selectedWorkoutID }
+                    if let chosenWorkout { selectWorkout(chosenWorkout.uuid) }
                     Task { await hkService.syncBiometrics(from: workoutStart, to: workoutEnd, linking: chosenWorkout) }
                 } label: {
                     Label("Try Again", systemImage: "arrow.clockwise")

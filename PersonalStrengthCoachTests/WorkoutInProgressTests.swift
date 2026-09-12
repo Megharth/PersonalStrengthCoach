@@ -86,7 +86,7 @@ final class WorkoutInProgressTests: XCTestCase {
 final class WorkoutInProgressPersistenceTests: XCTestCase {
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainer(
-            for: Schema(AppSchemaV6.models),
+            for: Schema(AppSchemaV7.models),
             migrationPlan: AppMigrationPlan.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
@@ -184,8 +184,8 @@ final class WorkoutInProgressPersistenceTests: XCTestCase {
     }
 
     func testCurrentSchemaContainsDraftModelsAndBuildsContainer() throws {
-        XCTAssertTrue(AppSchemaV6.models.contains { $0 == WorkoutInProgress.self })
-        XCTAssertTrue(AppSchemaV6.models.contains { $0 == WorkoutInProgressSet.self })
+        XCTAssertTrue(AppSchemaV7.models.contains { $0 == WorkoutInProgress.self })
+        XCTAssertTrue(AppSchemaV7.models.contains { $0 == WorkoutInProgressSet.self })
         _ = try makeInMemoryContainer()
     }
 }

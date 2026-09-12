@@ -190,6 +190,18 @@ final class WorkoutHealthKitService: ObservableObject {
         return summaries[0].uuid
     }
 
+    /// The selection to restore when a workout's Health-sync UI appears. A
+    /// previously saved link wins whenever that workout is still among the
+    /// day's candidates; otherwise this falls back to `defaultSelection`, so a
+    /// link pointing at a deleted Health workout degrades to the unambiguous
+    /// single-candidate case rather than showing a phantom selection.
+    static func resolvedSelection(persisted: UUID?, among summaries: [HKWorkoutSummary]) -> UUID? {
+        if let persisted, summaries.contains(where: { $0.uuid == persisted }) {
+            return persisted
+        }
+        return defaultSelection(among: summaries)
+    }
+
     /// Queries Apple Health for all workouts that start on the same calendar day
     /// as `date`, so the user can confidently pick the one that matches their
     /// logged session instead of the service guessing.
